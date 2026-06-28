@@ -94,7 +94,7 @@ foreground is used for the in-window area."
   :type 'string
   :group 'poimap)
 
-(defcustom poimap-visible "#ffffff39"
+(defcustom poimap-visible "#ffffff28"
   "Fill color for the visible-window rectangle."
   :type 'string
   :group 'poimap)
@@ -160,12 +160,13 @@ SIZE is the line width if POS-END is given or the point size."
   :type 'hook
   :group 'poimap)
 
-(defun poimap--live-window ()
+(defun poimap--live-window (&optional window)
   "Return a reasonable window for the current buffer."
-  (or (and (window-live-p (selected-window))
-           (eq (window-buffer (selected-window)) (current-buffer))
-           (selected-window))
-      (get-buffer-window (current-buffer) 'visible)))
+  (let ((window (or window (selected-window))))
+    (or (and (window-live-p window)
+             (eq (window-buffer window) (current-buffer))
+             window)
+        (get-buffer-window (current-buffer) 'visible))))
 
 (defun poimap--clamp (value low high)
   "Clamp VALUE between LOW and HIGH."
@@ -223,12 +224,12 @@ SIZE is the line width if POS-END is given or the point size."
            (+ parent-y half-height))
           (t y))))
 
-(defun poimap--collect-pois ()
+(defun poimap--collect-pois (window)
   "Collect points of interest from `poimap-interest-functions'."
   (cl-loop for fn in poimap-interest-functions
            when (functionp fn)
            append (condition-case err
-                      (funcall fn)
+                      (funcall fn window)
                     (error
                      (message "poimap: POI function %S failed: %s"
                               fn (error-message-string err))
@@ -334,7 +335,6 @@ Static string and number values are directly inserted."
  (:x1 num :y1 num :x2 num :y2 num :stroke str :stroke-width num))
 
 (defvar-local poimap--pois nil)
-(defvar-local poimap--str nil)
 (defvar-local poimap--last-update 0)
 
 ;; (unless (image-type-available-p 'svg)
@@ -342,21 +342,20 @@ Static string and number values are directly inserted."
 
 (defun poimap--svg (window width height)
   "Return an SVG object showing WINDOW's visible range in the current buffer."
-
   ;; To keep scrolling responsive, we only update every 0.03 seconds if input is
   ;; already pending.
-  (if (and (input-pending-p)
-           ;; FIXME: sometimes we have to redraw (size of the bar changed etc).
-           (< (float-time (time-subtract (current-time) poimap--last-update))
-              0.03)
-           poimap--str)
+  (if-let (cache (and (input-pending-p)
+                      ;; FIXME: sometimes we have to redraw (size of the bar changed etc).
+                      (< (float-time (time-subtract (current-time)
+                                                    poimap--last-update))
+                         0.03)
+                      (window-parameter window 'poimap-cache)))
       ;; We simply return the old svg.
-      poimap--str
+      cache
 
     ;; Otherwise we do the real work and redraw the bar.
-    (setq poimap--last-update (current-time))
-    (let* ((win (or window (poimap--live-window)))
-           (border-outer 1) ;; FIXME
+    (setq poimap--last-update (current-time)) ;; FIXME window param
+    (let* ((border-outer 1) ;; FIXME
            (x0 (* 0.5 border-outer))
            (y0 (* 0.5 border-outer))
            (x1 border-outer)
@@ -367,8 +366,8 @@ Static string and number values are directly inserted."
            (content-height (- height (* 2 border-outer)))
            (min-pos (point-min))
            (max-pos (point-max))
-           (visible-start (poimap--clamp (window-start win) min-pos max-pos))
-           (visible-end   (poimap--clamp (window-end win) min-pos max-pos))
+           (visible-start (poimap--clamp (window-start window) min-pos max-pos))
+           (visible-end   (poimap--clamp (window-end window) min-pos max-pos))
            (point-pos     (poimap--clamp (point) min-pos max-pos))
            (vw-pos (+ x1 (poimap--position-coordinate
                           visible-start min-pos max-pos bar-width)))
@@ -382,7 +381,7 @@ Static string and number values are directly inserted."
           ;; arrives. We'll use the previous saved POIs in such a case.
           (save-selected-window
             (while-no-input
-              (dolist (poi (poimap--collect-pois))
+              (dolist (poi (poimap--collect-pois window))
                 (let ((pos (poimap--poi-pos poi))
                       (pos-end (poimap--poi-pos-end poi)))
                   (when (and pos (<= min-pos pos) (<= pos max-pos))
@@ -425,63 +424,139 @@ Static string and number values are directly inserted."
 
       ;; Now we make the new svg with the current scroll position -- either with
       ;; newly calculated `poimap--pois' or with an old value.
-      (setq poimap--str
-            (apply #'concat
-                   (nconc
-                    (poimap--svg-root-open width height)
-                    ;; Whole buffer rectangle.
-                    (poimap--svg-rect x0 y0 bar-width bar-height
-                                      poimap-background
-                                      poimap-border border-outer)
-                    ;; Visible window rectangle.
-                    (poimap--svg-rect vw-pos y0 vw-size bar-height
-                                      poimap-visible
-                                      poimap-border border-outer)
-                    ;; Points of interest.
-                    (list poimap--pois)
-                    ;; Point marker.
-                    (let ((x (+ x1 (poimap--position-coordinate
-                                    point-pos min-pos max-pos content-width))))
-                      (poimap--svg-line x y1 x (+ y1 content-height) poimap-point 2))
-                    (poimap--svg-root-close)))))))
+      (set-window-parameter
+       window 'poimap-cache
+       (apply #'concat
+              (nconc
+               (poimap--svg-root-open width height)
+               ;; Whole buffer rectangle.
+               (poimap--svg-rect x0 y0 bar-width bar-height
+                                 poimap-background
+                                 poimap-border border-outer)
+               ;; Visible window rectangle.
+               (poimap--svg-rect vw-pos y0 vw-size bar-height
+                                 poimap-visible
+                                 poimap-border border-outer)
+               ;; Points of interest.
+               (list poimap--pois)
+               ;; Point marker.
+               (let ((x (+ x1 (poimap--position-coordinate
+                               point-pos min-pos max-pos content-width))))
+                 (poimap--svg-line x y1 x (+ y1 content-height) poimap-point 2))
+               (poimap--svg-root-close)))))))
 
 (defun poimap-string (&optional window width height)
   "Return a display string containing the projection image for WINDOW."
-  (let* ((bar-width (or width
-                        (pcase poimap-width
-                          ((and w (pred integerp)) w)
-                          ((and w (pred floatp))
-                           (round (* w (window-pixel-width window))))
-                          ((and w (pred functionp))
-                           (funcall w))
-                          (_ (error "Invalid value for `poimap-width'")))))
-         (bar-height (or height
-                         (pcase poimap-height
-                           ((and h (pred integerp)) h)
-                           ((and h (pred floatp))
-                            (round (* h (window-font-height window 'poimap-face))))
-                           ;; FIXME mode-line-window-selected-p, poimap-use-face ??
-                           ((and h (pred functionp))
-                            (funcall h))
-                           (_ (error "Invalid value for `poimap-height'")))))
-         (bar (propertize " "
-              'display (list 'image
-                             :type 'svg :data
-                             (poimap--svg window bar-width bar-height)
-                             :ascent 'center :scale 1)
-              'face (when poimap-use-face
-                      (if (mode-line-window-selected-p)
-                          'poimap-face
-                        'poimap-face-inactive)))))
-    (if poimap-align-right
-        (list
-         (propertize " "
-                     'display (list 'space :align-to `(- (+ right right-margin)
-                                                         (,(1+ bar-width)))))  ;; FIXME 1+ -> border
-         bar)
-      bar)))
+  (if-let (window (poimap--live-window window))
+      (let* ((bar-width (or width
+                            (pcase poimap-width
+                              ((and w (pred integerp)) w)
+                              ((and w (pred floatp))
+                               (round (* w (window-pixel-width window))))
+                              ((and w (pred functionp))
+                               (funcall w))
+                              (_ (error "Invalid value for `poimap-width'")))))
+             (bar-height (or height
+                             (pcase poimap-height
+                               ((and h (pred integerp)) h)
+                               ((and h (pred floatp))
+                                (round (* h (window-font-height window 'poimap-face))))
+                               ;; FIXME mode-line-window-selected-p, poimap-use-face ??
+                               ((and h (pred functionp))
+                                (funcall h))
+                               (_ (error "Invalid value for `poimap-height'")))))
+             (bar (propertize " "
+                              'display (list 'image
+                                             :type 'svg :data
+                                             (poimap--svg window bar-width bar-height)
+                                             :ascent 'center :scale 1)
+                              'help-echo "mouse-1: Go to position / drag to scroll"
+                              'local-map '(keymap
+                                           (mode-line
+                                            keymap (down-mouse-1 . poimap-mouse)))
+                              'face (when poimap-use-face
+                                      (if (mode-line-window-selected-p)
+                                          'poimap-face
+                                        'poimap-face-inactive)))))
+        (set-window-parameter window 'poimap-width bar-width)
+        (if poimap-align-right
+            (list
+             (propertize " "
+                         'display (list 'space :align-to `(- (+ right right-margin)
+                                                             (,(1+ bar-width)))))  ;; FIXME 1+ -> border
+             bar)
+          bar))))
 
-(defun poimap-isearch-pois ()
+(defun poimap--mouse-position (x width)
+  "Return the buffer position for poimap coordinate X in WIDTH."
+  (let* ((min-pos (point-min))
+         (max-pos (point-max))
+         (ratio (/ (float (poimap--clamp x 0 width))
+                   (max 1.0 (float width)))))
+    (poimap--clamp (round (+ min-pos (* ratio (- max-pos min-pos))))
+                   min-pos max-pos)))
+
+(defun poimap--mouse-goto (window x width)
+  "Move WINDOW's point to the buffer position represented by X in WIDTH."
+  (when (and (window-live-p window)
+             (numberp x)
+             (numberp width)
+             (> width 0))
+    (select-window window)
+    (with-current-buffer (window-buffer window)
+      (let ((pos (poimap--mouse-position x width)))
+        (goto-char pos)
+        (set-window-point window pos)
+        (recenter)))))
+
+(defun poimap--mouse-x (pos window width object-left)
+  "Return poimap-relative x coordinate for mouse position POS."
+  (if-let ((xy (posn-x-y pos)))
+      (poimap--clamp (- (car xy) object-left) 0 width)
+    (let* ((window-width (window-pixel-width window))
+           (left (- window-width width)))
+      (poimap--clamp (- left) 0 width))))
+
+(defun poimap-mouse (event)
+  "Handle poimap mouse click and drag EVENT."
+  (interactive "e")
+  (let* ((start (event-start event))
+         (window (posn-window start))
+         (width (and (windowp window)
+                     (window-parameter window 'poimap-width))))
+    ;; FIXME: poimap outer border is not taken into account currently
+    (when (and (window-live-p window)
+               (numberp width)
+               (> width 0))
+      (let* ((start-xy (posn-x-y start))
+             (start-object-xy (posn-object-x-y start))
+             (object-left (if (and start-xy start-object-xy)
+                              (- (car start-xy) (car start-object-xy))
+                            (- (window-pixel-width window) width)))
+             done)
+        (cl-labels ((handle-pos (pos)
+                      (poimap--mouse-goto
+                       window
+                       (poimap--mouse-x pos window width object-left)
+                       width)))
+          (handle-pos start)
+          (track-mouse
+            (let ((track-mouse 'dragging)
+                  (mouse-fine-grained-tracking t))
+              (while (not done)
+                (let ((ev (read-event)))
+                  (cond
+                   ((mouse-movement-p ev)
+                    (handle-pos (event-start ev)))
+                   ((eq (event-basic-type ev) 'mouse-1)
+                    (when (memq 'drag (event-modifiers ev))
+                      (handle-pos (event-end ev)))
+                    (setq done t))
+                   (t
+                    (push ev unread-command-events)
+                    (setq done t))))))))))))
+
+(defun poimap-isearch-pois (window)
   "Return POIs for active isearch matches in the current buffer."
   (when (and (bound-and-true-p isearch-mode)
              (boundp 'isearch-string)
@@ -501,6 +576,7 @@ Static string and number values are directly inserted."
           (while (and (not (eobp))
                       (re-search-forward regexp nil t))
             (push (list :pos (match-beginning 0)
+                        :height 0.65
                         :color poimap--poi-default-color)
                   positions)
             ;; Protect against zero-length regex matches.
@@ -508,7 +584,7 @@ Static string and number values are directly inserted."
               (forward-char 1)))
           (nreverse positions))))))
 
-(defun poimap-diff-hl-pois ()
+(defun poimap-diff-hl-pois (window)
   "Return POIs diff-hl markers"
   (let (pois)
     (dolist (ov (overlays-in (point-min) (point-max)))
@@ -530,14 +606,14 @@ Static string and number values are directly inserted."
                 pois))
          ((eq type 'delete)
           (push (list :pos (overlay-start ov)
-                      :size 4
+                      :size 6
                       :height 1.0
                       :color poimap--poi-diff-hl-delete
                       :line 6)
                 pois)))))
     (nreverse pois)))
 
-(defun poimap-imenu-items ()
+(defun poimap-imenu-items (window)
   "Returns POIs for Imenu items."
   (let ((pois)
         (index (ignore-errors (imenu--make-index-alist t))))
@@ -565,19 +641,8 @@ Static string and number values are directly inserted."
         (walk index)
         (nreverse pois)))))
 
-(defun poimap-overlays-with-property (property &optional color size)
-  "Return POIs for overlays that have PROPERTY.
-
-This is useful for VC/change-marker packages that already paint overlays.
-For example, with a package whose overlays contain property `diff-hl-type':
-
-  (add-hook 'prog-mode-hook
-            (lambda ()
-              (add-hook 'poimap-interest-functions
-                        (lambda ()
-                          (poimap-overlays-with-property
-                           'diff-hl-type \"#d787ff\" 2))
-                        nil t)))"
+(defun poimap-overlays-with-property (window property &optional color size)
+  "Return POIs for overlays that have PROPERTY."
   (let (pois)
     (dolist (ov (overlays-in (point-min) (point-max)))
       (when (overlay-get ov property)
@@ -592,17 +657,19 @@ For example, with a package whose overlays contain property `diff-hl-type':
 (set-face-attribute 'poimap-face nil :box nil)
 (set-face-attribute 'poimap-face-inactive nil :box nil)
 (setq poimap-height 1.35)
+(setq poimap-width 0.38)
 (setq poimap-interest-functions '(my/poimap-bms
                                   my/swiper-current-matches
                                   poimap-diff-hl-pois
                                   poimap-isearch-pois
+                                  ;; my/poimap-current-symbol
                                   poimap-imenu-items))
 
 
 (require 'swiper)
 (require 'ivy)
 
-(defun my/swiper-current-matches ()
+(defun my/swiper-current-matches (window)
   "Return POIs for current `swiper' matches."
   (when (and (fboundp 'ivy-state-caller)
              (fboundp 'ivy--get-window)
@@ -622,17 +689,44 @@ For example, with a package whose overlays contain property `diff-hl-type':
              (goto-char (point-min))
              (forward-line (1- line))
              (list :pos  (line-beginning-position)
+                   :height 0.65
                    :color poimap--poi-default-color))))
        ivy--old-cands))))
 
-(defun my/poimap-bms ()
+(defun my/poimap-current-symbol (window)
+  "Return a list of start positions of all occurrences of the symbol at point.
+
+Return nil if there is no symbol under point."
+  (when (and (< (point-max) 4194304)
+	     (eq (selected-window) window)
+	     (not (bound-and-true-p isearch-mode)))
+    (when-let ((bounds (bounds-of-thing-at-point 'symbol)))
+      (let ((symbol (buffer-substring-no-properties
+		     (car bounds)
+		     (cdr bounds)))
+	    (case-fold-search nil)
+	    pois)
+	(save-excursion
+	  (save-restriction
+	    (widen)
+	    (goto-char (point-min))
+	    (while (re-search-forward
+		    (concat "\\_<" (regexp-quote symbol) "\\_>")
+		    nil t)
+	      (push (list :pos (match-beginning 0)
+                          :height 0.65
+                          :color "#bbbbbb")
+                    pois))))
+	(nreverse pois)))))
+
+(defun my/poimap-bms (window)
   "Return POIs for bm bookmarks."
   (let (pois)
     (dolist (ov (bm-overlay-in-buffer))
       (push (list :pos (overlay-start ov)
                   :color "#e4a3ff"
                   :size 4
-                  :height 0.35)
+                  :height 0.4)
             pois))
     (nreverse pois)))
 

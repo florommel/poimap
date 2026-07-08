@@ -150,13 +150,21 @@ return a list.  Each element may be either:
 
 or a plist:
 
-  (:pos POS :pos-end POS-END :height HEIGHT :color COLOR :size SIZE)
+  (:shape SHAPE :pos POS :vert VERT :color COLOR :size SIZE)
 
-POS may be an integer buffer position or a marker.
-POS-END may be nil (to use a point) or the end position of the mark.
-HEIGHT is the relative height in the bar (between 0 and 1)
+SHAPE is a function called with the POI's position in the map (SVG coordinates
+calculated from POS), the POIs vertical position (SVG coordinates, calculated
+from VERT), size, and color.
+
+POS may be an integer buffer position, a marker, or a cons (START . END) of
+positions for range shapes.
+
+VERT is the relative height in the bar (between 0 and 1).
+
 COLOR is the color of the mark.
-SIZE is the line width if POS-END is given or the point size."
+
+SIZE is the shape size, either a number or a cons (WIDTH . HEIGHT) for shapes
+that need two dimensions."
   :type 'hook
   :group 'poimap)
 
@@ -181,24 +189,20 @@ SIZE is the line width if POS-END is given or the point size."
   "Map buffer POS between MIN-POS/MAX-POS to coordinate in LENGTH."
   (floor (* length (poimap--position-ratio pos min-pos max-pos))))
 
+(defun poimap--position-value (pos)
+  "Return POS as a buffer position value."
+  (if (markerp pos) (marker-position pos) pos))
+
 (defun poimap--poi-pos (poi)
   "Return POI's buffer position, or nil."
   (cond
-   ((integerp poi) poi)
-   ((markerp poi) (marker-position poi))
+   ((or (integerp poi) (markerp poi)) (poimap--position-value poi))
    ((and (consp poi) (plist-get poi :pos))
     (let ((pos (plist-get poi :pos)))
-      (if (markerp pos) (marker-position pos) pos)))
-   (t nil)))
-
-(defun poimap--poi-pos-end (poi)
-  "Return POI's end pos or nil"
-  (cond
-   ((integerp poi) poi)
-   ((markerp poi) (marker-position poi))
-   ((and (consp poi) (plist-get poi :pos-end))
-    (let ((pos-end (plist-get poi :pos-end)))
-      (if (markerp pos-end) (marker-position pos-end) pos-end)))
+      (if (consp pos)
+          (cons (poimap--position-value (car pos))
+                (poimap--position-value (cdr pos)))
+        (poimap--position-value pos))))
    (t nil)))
 
 (defun poimap--poi-color (poi)
@@ -211,9 +215,9 @@ SIZE is the line width if POS-END is given or the point size."
   (or (and (consp poi) (plist-get poi :size))
       poimap-interest-size))
 
-(defun poimap--poi-height (poi)
-  "Return POI's display height."
-  (or (and (consp poi) (plist-get poi :height)) 0.5))
+(defun poimap--poi-vert (poi)
+  "Return POI's display vertical position."
+  (or (and (consp poi) (plist-get poi :vert)) 0.5))
 
 (defun poimap--y-limit (y height parent-y parent-height)
   "Limit the child's y and height to the paren's y and height"
@@ -334,6 +338,24 @@ Static string and number values are directly inserted."
  poimap--svg-line line
  (:x1 num :y1 num :x2 num :y2 num :stroke str :stroke-width num))
 
+(defun poimap-circle (pos vert size color)
+  "Return SVG for a filled circle at POS and VERT with SIZE and COLOR."
+  (poimap--svg-circle pos vert size color color 0))
+
+(defun poimap-hline (pos vert size color)
+  "Return SVG for a horizontal line at POS and VERT with SIZE and COLOR.
+POS is a cons (START . END)."
+  (poimap--svg-line (car pos) vert (cdr pos) vert color size))
+
+(defun poimap-vline (pos vert size color)
+  "Return SVG for a vertical line at POS and VERT with SIZE and COLOR.
+SIZE may be a scalar height or a cons (WIDTH . HEIGHT)."
+  (let* ((width (if (consp size) (car size) poimap-interest-size))
+         (height (if (consp size) (cdr size) size))
+         (half-height (/ height 2)))
+    (poimap--svg-line pos (- vert half-height) pos (+ vert half-height)
+                      color width)))
+
 (defvar-local poimap--pois nil)
 (defvar-local poimap--last-update 0)
 
@@ -382,42 +404,33 @@ Static string and number values are directly inserted."
           (save-selected-window
             (while-no-input
               (dolist (poi (poimap--collect-pois window))
-                (let ((pos (poimap--poi-pos poi))
-                      (pos-end (poimap--poi-pos-end poi)))
-                  (when (and pos (<= min-pos pos) (<= pos max-pos))
-                    (let* ((cx (+ x1 (poimap--position-coordinate
-                                      pos min-pos max-pos content-width)))
-                           (cy (floor (+ y1 (* content-height
-                                               (poimap--poi-height poi)))))
-                           (size (poimap--poi-size poi)))
-                      (if pos-end
-                          (let* ((cx-end (+ x1
-                                            (poimap--position-coordinate
-                                             pos-end min-pos max-pos
-                                             content-width)))
-                                 (cx-end (if (< (- cx-end cx)
-                                                poimap-min-range-size)
-                                             (+ cx poimap-min-range-size)
-                                           cx-end))
-                                 (cy-s (poimap--y-limit cy size
-                                                        y1 content-height)))
-                            (push (poimap--svg-line cx cy-s cx-end cy-s
-                                                    (poimap--poi-color poi)
-                                                    size)
-                                  pois))
-                        (if-let* ((line (plist-get poi :line))
-                                  (half-line (/ line 2))
-                                  (cy-l (poimap--y-limit cy line
-                                                         y1 content-height)))
-                            (push (poimap--svg-line cx (- cy-l half-line) cx
-                                                    (+ cy-l half-line)
-                                                    (poimap--poi-color poi)
-                                                    size)
-                                  pois)
-                          (push (poimap--svg-circle cx cy size
-                                                    (poimap--poi-color poi)
-                                                    (poimap--poi-color poi) 0)
-                                pois)))))))
+                (let ((pos (poimap--poi-pos poi)))
+                  (when (and pos
+                             (<= min-pos (if (consp pos) (car pos) pos))
+                             (<= (if (consp pos) (car pos) pos) max-pos))
+                    (let* ((shape (or (and (consp poi) (plist-get poi :shape))
+                                      #'poimap-circle))
+                           (map-pos (if (consp pos)
+                                        (let* ((start (+ x1 (poimap--position-coordinate
+                                                            (car pos) min-pos max-pos
+                                                            content-width)))
+                                               (end (+ x1 (poimap--position-coordinate
+                                                          (cdr pos) min-pos max-pos
+                                                          content-width))))
+                                          (cons start
+                                                (if (< (- end start) poimap-min-range-size)
+                                                    (+ start poimap-min-range-size)
+                                                  end)))
+                                      (+ x1 (poimap--position-coordinate
+                                             pos min-pos max-pos content-width))))
+                           (vert (floor (+ y1 (* content-height
+                                                 (poimap--poi-vert poi)))))
+                           (size (poimap--poi-size poi))
+                           (limit-size (if (consp size) (cdr size) size))
+                           (vert (poimap--y-limit vert limit-size
+                                                  y1 content-height)))
+                      (push (funcall shape map-pos vert size (poimap--poi-color poi))
+                            pois)))))
               (setq pois (mapconcat #'identity (mapcan #'identity pois)))
               nil))
         (setq poimap--pois pois))
@@ -556,7 +569,7 @@ Static string and number values are directly inserted."
                     (push ev unread-command-events)
                     (setq done t))))))))))))
 
-(defun poimap-isearch-pois (window)
+(defun poimap-isearch-pois (_window)
   "Return POIs for active isearch matches in the current buffer."
   (when (and (bound-and-true-p isearch-mode)
              (boundp 'isearch-string)
@@ -575,8 +588,9 @@ Static string and number values are directly inserted."
           (goto-char (point-min))
           (while (and (not (eobp))
                       (re-search-forward regexp nil t))
-            (push (list :pos (match-beginning 0)
-                        :height 0.65
+            (push (list :shape #'poimap-circle
+                        :pos (match-beginning 0)
+                        :vert 0.65
                         :color poimap--poi-default-color)
                   positions)
             ;; Protect against zero-length regex matches.
@@ -584,36 +598,36 @@ Static string and number values are directly inserted."
               (forward-char 1)))
           (nreverse positions))))))
 
-(defun poimap-diff-hl-pois (window)
+(defun poimap-diff-hl-pois (_window)
   "Return POIs diff-hl markers"
   (let (pois)
     (dolist (ov (overlays-in (point-min) (point-max)))
       (when-let (type (overlay-get ov 'diff-hl-hunk-type))
         (cond
          ((eq type 'insert)
-          (push (list :pos (overlay-start ov)
-                      :pos-end (overlay-end ov)
-                      :height 1.0
+          (push (list :shape #'poimap-hline
+                      :pos (cons (overlay-start ov) (overlay-end ov))
+                      :vert 1.0
                       :color poimap--poi-diff-hl-insert
                       :size 6)
                 pois))
          ((eq type 'change)
-          (push (list :pos (overlay-start ov)
-                      :pos-end (overlay-end ov)
-                      :height 1.0
+          (push (list :shape #'poimap-hline
+                      :pos (cons (overlay-start ov) (overlay-end ov))
+                      :vert 1.0
                       :color poimap--poi-diff-hl-change
                       :size 6)
                 pois))
          ((eq type 'delete)
-          (push (list :pos (overlay-start ov)
-                      :size 6
-                      :height 1.0
+          (push (list :shape #'poimap-vline
+                      :pos (overlay-start ov)
+                      :vert 1.0
                       :color poimap--poi-diff-hl-delete
-                      :line 6)
+                      :size (cons 6 6))
                 pois)))))
     (nreverse pois)))
 
-(defun poimap-imenu-items (window)
+(defun poimap-imenu-items (_window)
   "Returns POIs for Imenu items."
   (let ((pois)
         (index (ignore-errors (imenu--make-index-alist t))))
@@ -630,23 +644,24 @@ Static string and number values are directly inserted."
                                                             (car item)))
                                     (cdr item)))
                    (when (or (markerp pos) (numberp pos))
-                     (push (list :pos pos
+                     (push (list :shape #'poimap-vline
+                                 :pos pos
+                                 :vert 0.0
                                  :color poimap--poi-imenu
-                                 :size 2
-                                 :height 0.0
-                                 :line 8)
+                                 :size (cons 2 8))
                            pois))))
                (when (imenu--subalist-p item)
                  (walk (cdr item))))))
         (walk index)
         (nreverse pois)))))
 
-(defun poimap-overlays-with-property (window property &optional color size)
+(defun poimap-overlays-with-property (_window property &optional color size)
   "Return POIs for overlays that have PROPERTY."
   (let (pois)
     (dolist (ov (overlays-in (point-min) (point-max)))
       (when (overlay-get ov property)
-        (push (list :pos (overlay-start ov)
+        (push (list :shape #'poimap-circle
+                    :pos (overlay-start ov)
                     :color (or color poimap--poi-default-color)
                     :size (or size poimap-interest-size))
               pois)))
@@ -669,7 +684,7 @@ Static string and number values are directly inserted."
 (require 'swiper)
 (require 'ivy)
 
-(defun my/swiper-current-matches (window)
+(defun my/swiper-current-matches (_window)
   "Return POIs for current `swiper' matches."
   (when (and (fboundp 'ivy-state-caller)
              (fboundp 'ivy--get-window)
@@ -688,8 +703,9 @@ Static string and number values are directly inserted."
            (save-excursion
              (goto-char (point-min))
              (forward-line (1- line))
-             (list :pos  (line-beginning-position)
-                   :height 0.65
+             (list :shape #'poimap-circle
+                   :pos  (line-beginning-position)
+                   :vert 0.65
                    :color poimap--poi-default-color))))
        ivy--old-cands))))
 
@@ -713,20 +729,22 @@ Return nil if there is no symbol under point."
 	    (while (re-search-forward
 		    (concat "\\_<" (regexp-quote symbol) "\\_>")
 		    nil t)
-	      (push (list :pos (match-beginning 0)
-                          :height 0.65
+	      (push (list :shape #'poimap-circle
+                          :pos (match-beginning 0)
+                          :vert 0.65
                           :color "#bbbbbb")
                     pois))))
 	(nreverse pois)))))
 
-(defun my/poimap-bms (window)
+(defun my/poimap-bms (_window)
   "Return POIs for bm bookmarks."
   (let (pois)
     (dolist (ov (bm-overlay-in-buffer))
-      (push (list :pos (overlay-start ov)
+      (push (list :shape #'poimap-circle
+                  :pos (overlay-start ov)
+                  :vert 0.4
                   :color "#e4a3ff"
-                  :size 4
-                  :height 0.4)
+                  :size 4)
             pois))
     (nreverse pois)))
 

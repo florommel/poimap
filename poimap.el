@@ -134,8 +134,8 @@ foreground is used for the in-window area."
   :type 'number
   :group 'poimap)
 
-(defcustom poimap-min-range-size 8
-  "Minimal range size"
+(defcustom poimap-min-range-size 0.4
+  "Minimal range size in percent of the bar"
   :type 'number
   :group 'poimap)
 
@@ -180,14 +180,21 @@ that need two dimensions."
   "Clamp VALUE between LOW and HIGH."
   (min high (max low value)))
 
-(defun poimap--position-ratio (pos min-pos max-pos)
-  "Return POS as a 0..1 ratio between MIN-POS and MAX-POS."
-  (let ((span (max 1.0 (float (- max-pos min-pos)))))
-    (/ (float (- pos min-pos)) span)))
+(defun poimap--percent (pos min-pos max-pos)
+  "Convert POS between MIN-POS/MAX-POS to percent."
+  (concat (number-to-string
+           (/ (* 100.0 (- pos min-pos))
+              (- max-pos min-pos)))
+          "%"))
 
-(defun poimap--position-coordinate (pos min-pos max-pos length)
-  "Map buffer POS between MIN-POS/MAX-POS to coordinate in LENGTH."
-  (floor (* length (poimap--position-ratio pos min-pos max-pos))))
+(defun poimap--percent-number (pos min-pos max-pos)
+  "Convert POS between MIN-POS/MAX-POS to a numeric percent."
+  (/ (* 100.0 (- pos min-pos))
+     (- max-pos min-pos)))
+
+(defun poimap--percent-string (percent)
+  "Return PERCENT as an SVG percent string."
+  (concat (number-to-string percent) "%"))
 
 (defun poimap--position-value (pos)
   "Return POS as a buffer position value."
@@ -219,13 +226,13 @@ that need two dimensions."
   "Return POI's display vertical position."
   (or (and (consp poi) (plist-get poi :vert)) 0.5))
 
-(defun poimap--y-limit (y height parent-y parent-height)
+(defun poimap--y-limit (y height parent-height)
   "Limit the child's y and height to the paren's y and height"
   (let ((half-height (/ height 2)))
-    (cond ((> (+ y half-height) (+ parent-y parent-height))
-           (- (+ parent-y parent-height) half-height))
-          ((< (- y half-height) parent-y)
-           (+ parent-y half-height))
+    (cond ((> (+ y half-height) parent-height)
+           (- parent-height half-height))
+          ((< (- y half-height) 0)
+           half-height)
           (t y))))
 
 (defun poimap--collect-pois (window)
@@ -309,43 +316,60 @@ Static string and number values are directly inserted."
 
 (poimap--svg-template
  poimap--svg-root svg
- (:width num :height num :stroke-width 0
+ (:width str :height str :stroke-width 0
          :version "1.1"
          :xmlns "http://www.w3.org/2000/svg"
          :xmlns:xlink "http://www.w3.org/1999/xlink"))
 
 (defmacro poimap--svg-root-open (width height)
-  "Opening SVG tag"
-  `(list "<svg width=\"" (number-to-string ,width)
-         "\" height=\"" (number-to-string ,height)
-         ,(concat "\" version=\"1.1\" "
+  "Opening root SVG tag."
+  `(list "<svg width=\"" ,width
+         "\" height=\"" ,height
+         "\" shape-rendering=\"crispEdges\""
+         ,(concat " version=\"1.1\" "
                   "xmlns=\"http://www.w3.org/2000/svg\""
                   " xmlns:xlink=\"http://www.w3.org/1999/xlink\">")))
 
 (defmacro poimap--svg-root-close ()
-  "Closing SVG tag"
+  "Closing root SVG tag."
+  '(list "</svg>"))
+
+(defmacro poimap--svg-inner-open (x y width height)
+  "Opening inner SVG tag."
+  `(list "<svg x=\"" ,x
+         "\" y=\"" ,y
+         "\" width=\"" ,width
+         "\" height=\"" ,height
+         "\">"))
+
+(defmacro poimap--svg-inner-close ()
+  "Closing inner SVG tag."
   '(list "</svg>"))
 
 (poimap--svg-template
  poimap--svg-rect rect
- (:x num :y num :width num :height num :fill str :stroke str :stroke-width num))
+ (:x str :y str :width str :height str :fill str :stroke str :stroke-width str))
 
 (poimap--svg-template
  poimap--svg-circle circle
- (:cx num :cy num :r num :fill str :stroke str :stroke-width num))
+ (:cx str :cy str :r str :fill str :stroke str :stroke-width str
+      :shape-rendering "geometricPrecision"))
 
 (poimap--svg-template
  poimap--svg-line line
- (:x1 num :y1 num :x2 num :y2 num :stroke str :stroke-width num))
+ (:x1 str :y1 str :x2 str :y2 str :stroke str :stroke-width str))
 
 (defun poimap-circle (pos vert size color)
   "Return SVG for a filled circle at POS and VERT with SIZE and COLOR."
-  (poimap--svg-circle pos vert size color color 0))
+  (poimap--svg-circle pos (number-to-string vert) (number-to-string size)
+                      color color "0"))
 
 (defun poimap-hline (pos vert size color)
   "Return SVG for a horizontal line at POS and VERT with SIZE and COLOR.
 POS is a cons (START . END)."
-  (poimap--svg-line (car pos) vert (cdr pos) vert color size))
+  (let ((vert (number-to-string vert)))
+    (poimap--svg-line (car pos) vert (cdr pos) vert
+                      color (number-to-string size))))
 
 (defun poimap-vline (pos vert size color)
   "Return SVG for a vertical line at POS and VERT with SIZE and COLOR.
@@ -353,8 +377,9 @@ SIZE may be a scalar height or a cons (WIDTH . HEIGHT)."
   (let* ((width (if (consp size) (car size) poimap-interest-size))
          (height (if (consp size) (cdr size) size))
          (half-height (/ height 2)))
-    (poimap--svg-line pos (- vert half-height) pos (+ vert half-height)
-                      color width)))
+    (poimap--svg-line pos (number-to-string (- vert half-height))
+                      pos (number-to-string (+ vert half-height))
+                      color (number-to-string width))))
 
 (defvar-local poimap--pois nil)
 (defvar-local poimap--last-update 0)
@@ -377,25 +402,15 @@ SIZE may be a scalar height or a cons (WIDTH . HEIGHT)."
 
     ;; Otherwise we do the real work and redraw the bar.
     (setq poimap--last-update (current-time)) ;; FIXME window param
-    (let* ((border-outer 1) ;; FIXME
-           (x0 (* 0.5 border-outer))
-           (y0 (* 0.5 border-outer))
-           (x1 border-outer)
-           (y1 border-outer)
-           (bar-width  (- width border-outer))
-           (bar-height (- height border-outer))
+    (let* ((border-outer 1)
            (content-width  (- width (* 2 border-outer)))
            (content-height (- height (* 2 border-outer)))
            (min-pos (point-min))
-           (max-pos (point-max))
+           (max-pos (max (1+ min-pos) (point-max)))
            (visible-start (poimap--clamp (window-start window) min-pos max-pos))
-           (visible-end   (poimap--clamp (window-end window) min-pos max-pos))
-           (point-pos     (poimap--clamp (point) min-pos max-pos))
-           (vw-pos (+ x1 (poimap--position-coordinate
-                          visible-start min-pos max-pos bar-width)))
-           (vw-end (+ x1 (poimap--position-coordinate
-                          visible-end min-pos max-pos bar-width)))
-           (vw-size (max 1 (- vw-end vw-pos)))
+           (visible-end (poimap--clamp (window-end window) min-pos max-pos))
+           (point-pos (poimap--clamp (point) min-pos max-pos))
+           (visible-width (- visible-end visible-start))
            (pois))
       (unless
           ;; Collecting POIs is the expensive part. Since updating them is not
@@ -411,24 +426,21 @@ SIZE may be a scalar height or a cons (WIDTH . HEIGHT)."
                     (let* ((shape (or (and (consp poi) (plist-get poi :shape))
                                       #'poimap-circle))
                            (map-pos (if (consp pos)
-                                        (let* ((start (+ x1 (poimap--position-coordinate
-                                                            (car pos) min-pos max-pos
-                                                            content-width)))
-                                               (end (+ x1 (poimap--position-coordinate
-                                                          (cdr pos) min-pos max-pos
-                                                          content-width))))
-                                          (cons start
-                                                (if (< (- end start) poimap-min-range-size)
-                                                    (+ start poimap-min-range-size)
-                                                  end)))
-                                      (+ x1 (poimap--position-coordinate
-                                             pos min-pos max-pos content-width))))
-                           (vert (floor (+ y1 (* content-height
-                                                 (poimap--poi-vert poi)))))
+                                        (let* ((start (poimap--percent-number
+                                                       (car pos) min-pos max-pos))
+                                               (end (poimap--percent-number
+                                                     (cdr pos) min-pos max-pos)))
+                                          (cons (poimap--percent-string start)
+                                                (poimap--percent-string
+                                                 (if (< (- end start)
+                                                        poimap-min-range-size)
+                                                     (+ start poimap-min-range-size)
+                                                   end))))
+                                      (poimap--percent pos min-pos max-pos)))
+                           (vert (floor (* content-height (poimap--poi-vert poi))))
                            (size (poimap--poi-size poi))
                            (limit-size (if (consp size) (cdr size) size))
-                           (vert (poimap--y-limit vert limit-size
-                                                  y1 content-height)))
+                           (vert (poimap--y-limit vert limit-size content-height)))
                       (push (funcall shape map-pos vert size (poimap--poi-color poi))
                             pois)))))
               (setq pois (mapconcat #'identity (mapcan #'identity pois)))
@@ -441,21 +453,35 @@ SIZE may be a scalar height or a cons (WIDTH . HEIGHT)."
        window 'poimap-cache
        (apply #'concat
               (nconc
-               (poimap--svg-root-open width height)
+               (poimap--svg-root-open (number-to-string width)
+                                      (number-to-string height))
                ;; Whole buffer rectangle.
-               (poimap--svg-rect x0 y0 bar-width bar-height
+               (poimap--svg-rect (number-to-string (ceiling (/ border-outer 2.0)))
+                                 (number-to-string (ceiling (/ border-outer 2.0)))
+                                 (number-to-string (+ content-width border-outer))
+                                 (number-to-string (+ content-height border-outer))
                                  poimap-background
-                                 poimap-border border-outer)
+                                 poimap-border
+                                 (number-to-string border-outer))
+               (poimap--svg-inner-open (number-to-string border-outer)
+                                       (number-to-string border-outer)
+                                       (number-to-string content-width)
+                                       (number-to-string content-height))
                ;; Visible window rectangle.
-               (poimap--svg-rect vw-pos y0 vw-size bar-height
-                                 poimap-visible
-                                 poimap-border border-outer)
+               (poimap--svg-rect (poimap--percent visible-start min-pos max-pos)
+                                 "0"
+                                 (poimap--percent visible-width 0 max-pos)
+                                 (number-to-string content-height)
+                                 poimap-visible "transparent" "0")
                ;; Points of interest.
                (list poimap--pois)
                ;; Point marker.
-               (let ((x (+ x1 (poimap--position-coordinate
-                               point-pos min-pos max-pos content-width))))
-                 (poimap--svg-line x y1 x (+ y1 content-height) poimap-point 2))
+               (let ((x (number-to-string (+ 1 (/ (* 1.0 (- content-width 2)
+                                                     (- point-pos min-pos))
+                                                  (- max-pos min-pos))))))
+                 (poimap--svg-line x "0" x (number-to-string content-height)
+                                   poimap-point "2"))
+               (poimap--svg-inner-close)
                (poimap--svg-root-close)))))))
 
 (defun poimap-string (&optional window width height)
@@ -623,7 +649,7 @@ SIZE may be a scalar height or a cons (WIDTH . HEIGHT)."
                       :pos (overlay-start ov)
                       :vert 1.0
                       :color poimap--poi-diff-hl-delete
-                      :size (cons 6 6))
+                      :size (cons 4 6))
                 pois)))))
     (nreverse pois)))
 

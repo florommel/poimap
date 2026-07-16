@@ -129,12 +129,12 @@ foreground is used for the in-window area."
   :type 'string
   :group 'poimap)
 
-(defcustom poimap-interest-size 3
+(defcustom poimap-interest-size 0.1
   "Default point-of-interest dot size, in pixels."
   :type 'number
   :group 'poimap)
 
-(defcustom poimap-min-range-size 0.4
+(defcustom poimap-min-range-size 0.004
   "Minimal range size in percent of the bar"
   :type 'number
   :group 'poimap)
@@ -144,11 +144,7 @@ foreground is used for the in-window area."
   "Functions that return points of interest for the current buffer.
 
 Each function is called with no arguments in the current buffer and should
-return a list.  Each element may be either:
-
-  POS
-
-or a plist:
+return a list.  Each element is a plist:
 
   (:shape SHAPE :pos POS :vert VERT :color COLOR :size SIZE)
 
@@ -159,12 +155,15 @@ from VERT), size, and color.
 POS may be an integer buffer position, a marker, or a cons (START . END) of
 positions for range shapes.
 
-VERT is the relative height in the bar (between 0 and 1).
+VERT is the vertical position of the POI relative to the height of the bar
+(between 0 and 1).
 
 COLOR is the color of the mark.
 
-SIZE is the shape size, either a number or a cons (WIDTH . HEIGHT) for shapes
-that need two dimensions."
+SIZE is the shape size.  The type is up to the SHAPE function.  Usually it is
+either a single number which is interpreted as absolute or height-relative size
+or a cons (WIDTH . HEIGHT) where WIDTH is an absolute value and HEIGHT is a
+bar-height-relative value."
   :type 'hook
   :group 'poimap)
 
@@ -187,9 +186,13 @@ that need two dimensions."
               (- max-pos min-pos)))
           "%"))
 
-(defun poimap--percent-number (pos min-pos max-pos)
+(defun poimap--percent-from-factor (factor)
+  "Return PERCENT as an SVG percent string."
+  (concat (number-to-string (* 100 factor)) "%"))
+
+(defun poimap--factor (pos min-pos max-pos)
   "Convert POS between MIN-POS/MAX-POS to a numeric percent."
-  (/ (* 100.0 (- pos min-pos))
+  (/ (* 1.0 (- pos min-pos))
      (- max-pos min-pos)))
 
 (defun poimap--percent-string (percent)
@@ -226,14 +229,11 @@ that need two dimensions."
   "Return POI's display vertical position."
   (or (and (consp poi) (plist-get poi :vert)) 0.5))
 
-(defun poimap--y-limit (y height parent-height)
-  "Limit the child's y and height to the paren's y and height"
-  (let ((half-height (/ height 2)))
-    (cond ((> (+ y half-height) parent-height)
-           (- parent-height half-height))
-          ((< (- y half-height) 0)
-           half-height)
-          (t y))))
+(defun poimap-clamp-vert (value size)
+  "Limit the child's value and size to the paren's value and size"
+  (cond ((> (+ value size) 1) (- 1 size))
+        ((< (- value size) 0) size)
+        (t value)))
 
 (defun poimap--collect-pois (window)
   "Collect points of interest from `poimap-interest-functions'."
@@ -348,38 +348,68 @@ Static string and number values are directly inserted."
 
 (poimap--svg-template
  poimap--svg-rect rect
+ (:x str :y str :width str :height str :fill str))
+
+(poimap--svg-template
+ poimap--svg-rect-s rect
  (:x str :y str :width str :height str :fill str :stroke str :stroke-width str))
 
 (poimap--svg-template
- poimap--svg-circle circle
+ poimap--svg-rect-t rect
+ (:x str :y str :width str :height str :fill str :transform str))
+
+(poimap--svg-template
+ poimap--svg-circle-t circle
  (:cx str :cy str :r str :fill str :stroke str :stroke-width str
+      :shape-rendering "geometricPrecision"))
+
+(poimap--svg-template
+ poimap--svg-circle circle
+ (:cx str :cy str :r str :fill str
       :shape-rendering "geometricPrecision"))
 
 (poimap--svg-template
  poimap--svg-line line
  (:x1 str :y1 str :x2 str :y2 str :stroke str :stroke-width str))
 
+(defun poimap-svg-ytranslate (vert height)
+  "Get the vertical translate based on HEIGHT"
+  (concat "translate(0 "
+          (cond
+           ((= vert 0) "0")
+           ((= vert 1) (number-to-string (* -1 height)))
+           (t (number-to-string (/ height -2.0))))
+          ")"))
+
 (defun poimap-circle (pos vert size color)
-  "Return SVG for a filled circle at POS and VERT with SIZE and COLOR."
-  (poimap--svg-circle pos (number-to-string vert) (number-to-string size)
-                      color color "0"))
+  "Return SVG for a filled circle at POS and VERT with SIZE and COLOR.
+SIZE is height-relative."
+  (poimap--svg-circle (poimap--percent-from-factor pos)
+                      (poimap--percent-from-factor vert)
+                      (number-to-string size)
+                      color))
 
-(defun poimap-hline (pos vert size color)
-  "Return SVG for a horizontal line at POS and VERT with SIZE and COLOR.
-POS is a cons (START . END)."
-  (let ((vert (number-to-string vert)))
-    (poimap--svg-line (car pos) vert (cdr pos) vert
-                      color (number-to-string size))))
+(defun poimap-hrect (pos vert size color)
+  (let* ((x1 (car pos))
+         (x2 (cdr pos)))
+    (poimap--svg-rect-t (poimap--percent-from-factor x1)
+                        (poimap--percent-from-factor vert)
+                        (poimap--percent-from-factor (- x2 x1))
+                        (number-to-string size)
+                        color
+                        (poimap-svg-ytranslate vert size))))
 
-(defun poimap-vline (pos vert size color)
+(defun poimap-vrect (pos vert size color)
   "Return SVG for a vertical line at POS and VERT with SIZE and COLOR.
-SIZE may be a scalar height or a cons (WIDTH . HEIGHT)."
-  (let* ((width (if (consp size) (car size) poimap-interest-size))
-         (height (if (consp size) (cdr size) size))
-         (half-height (/ height 2)))
-    (poimap--svg-line pos (number-to-string (- vert half-height))
-                      pos (number-to-string (+ vert half-height))
-                      color (number-to-string width))))
+SIZE is a cons (ABSOLUTE-WIDTH . RELATIVE-HEIGHT)."
+  (let* ((width  (car size))
+         (height (cdr size)))
+    (poimap--svg-rect-t (poimap--percent-from-factor pos)
+                        (poimap--percent-from-factor vert)
+                        (number-to-string width)
+                        (number-to-string height)
+                        color
+                        (poimap-svg-ytranslate vert height))))
 
 (defvar-local poimap--pois nil)
 (defvar-local poimap--last-update 0)
@@ -426,21 +456,18 @@ SIZE may be a scalar height or a cons (WIDTH . HEIGHT)."
                     (let* ((shape (or (and (consp poi) (plist-get poi :shape))
                                       #'poimap-circle))
                            (map-pos (if (consp pos)
-                                        (let* ((start (poimap--percent-number
+                                        (let* ((start (poimap--factor
                                                        (car pos) min-pos max-pos))
-                                               (end (poimap--percent-number
+                                               (end (poimap--factor
                                                      (cdr pos) min-pos max-pos)))
-                                          (cons (poimap--percent-string start)
-                                                (poimap--percent-string
-                                                 (if (< (- end start)
-                                                        poimap-min-range-size)
-                                                     (+ start poimap-min-range-size)
-                                                   end))))
-                                      (poimap--percent pos min-pos max-pos)))
-                           (vert (floor (* content-height (poimap--poi-vert poi))))
-                           (size (poimap--poi-size poi))
-                           (limit-size (if (consp size) (cdr size) size))
-                           (vert (poimap--y-limit vert limit-size content-height)))
+                                          (cons start
+                                                (if (< (- end start)
+                                                       poimap-min-range-size)
+                                                    (+ start poimap-min-range-size)
+                                                  end)))
+                                      (poimap--factor pos min-pos max-pos)))
+                           (vert (poimap--poi-vert poi))
+                           (size (poimap--poi-size poi)))
                       (push (funcall shape map-pos vert size (poimap--poi-color poi))
                             pois)))))
               (setq pois (mapconcat #'identity (mapcan #'identity pois)))
@@ -456,13 +483,13 @@ SIZE may be a scalar height or a cons (WIDTH . HEIGHT)."
                (poimap--svg-root-open (number-to-string width)
                                       (number-to-string height))
                ;; Whole buffer rectangle.
-               (poimap--svg-rect (number-to-string (ceiling (/ border-outer 2.0)))
-                                 (number-to-string (ceiling (/ border-outer 2.0)))
-                                 (number-to-string (+ content-width border-outer))
-                                 (number-to-string (+ content-height border-outer))
-                                 poimap-background
-                                 poimap-border
-                                 (number-to-string border-outer))
+               (poimap--svg-rect-s (number-to-string (ceiling (/ border-outer 2.0)))
+                                   (number-to-string (ceiling (/ border-outer 2.0)))
+                                   (number-to-string (+ content-width border-outer))
+                                   (number-to-string (+ content-height border-outer))
+                                   poimap-background
+                                   poimap-border
+                                   (number-to-string border-outer))
                (poimap--svg-inner-open (number-to-string border-outer)
                                        (number-to-string border-outer)
                                        (number-to-string content-width)
@@ -472,7 +499,7 @@ SIZE may be a scalar height or a cons (WIDTH . HEIGHT)."
                                  "0"
                                  (poimap--percent visible-width 0 max-pos)
                                  (number-to-string content-height)
-                                 poimap-visible "transparent" "0")
+                                 poimap-visible)
                ;; Points of interest.
                (list poimap--pois)
                ;; Point marker.
@@ -631,21 +658,21 @@ SIZE may be a scalar height or a cons (WIDTH . HEIGHT)."
       (when-let (type (overlay-get ov 'diff-hl-hunk-type))
         (cond
          ((eq type 'insert)
-          (push (list :shape #'poimap-hline
+          (push (list :shape #'poimap-hrect
                       :pos (cons (overlay-start ov) (overlay-end ov))
                       :vert 1.0
                       :color poimap--poi-diff-hl-insert
                       :size 6)
                 pois))
          ((eq type 'change)
-          (push (list :shape #'poimap-hline
+          (push (list :shape #'poimap-hrect
                       :pos (cons (overlay-start ov) (overlay-end ov))
                       :vert 1.0
                       :color poimap--poi-diff-hl-change
                       :size 6)
                 pois))
          ((eq type 'delete)
-          (push (list :shape #'poimap-vline
+          (push (list :shape #'poimap-vrect
                       :pos (overlay-start ov)
                       :vert 1.0
                       :color poimap--poi-diff-hl-delete
@@ -670,7 +697,7 @@ SIZE may be a scalar height or a cons (WIDTH . HEIGHT)."
                                                             (car item)))
                                     (cdr item)))
                    (when (or (markerp pos) (numberp pos))
-                     (push (list :shape #'poimap-vline
+                     (push (list :shape #'poimap-vrect
                                  :pos pos
                                  :vert 0.0
                                  :color poimap--poi-imenu

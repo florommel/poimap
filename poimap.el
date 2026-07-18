@@ -179,25 +179,14 @@ bar-height-relative value."
   "Clamp VALUE between LOW and HIGH."
   (min high (max low value)))
 
-(defun poimap--percent (pos min-pos max-pos)
-  "Convert POS between MIN-POS/MAX-POS to percent."
-  (concat (number-to-string
-           (/ (* 100.0 (- pos min-pos))
-              (- max-pos min-pos)))
-          "%"))
-
-(defun poimap--percent-from-factor (factor)
-  "Return PERCENT as an SVG percent string."
-  (concat (number-to-string (* 100 factor)) "%"))
-
 (defun poimap--factor (pos min-pos max-pos)
   "Convert POS between MIN-POS/MAX-POS to a numeric percent."
   (/ (* 1.0 (- pos min-pos))
      (- max-pos min-pos)))
 
-(defun poimap--percent-string (percent)
+(defun poimap--percent (factor)
   "Return PERCENT as an SVG percent string."
-  (concat (number-to-string percent) "%"))
+  (concat (number-to-string (* 100 factor)) "%"))
 
 (defun poimap--position-value (pos)
   "Return POS as a buffer position value."
@@ -228,12 +217,6 @@ bar-height-relative value."
 (defun poimap--poi-vert (poi)
   "Return POI's display vertical position."
   (or (and (consp poi) (plist-get poi :vert)) 0.5))
-
-(defun poimap-clamp-vert (value size)
-  "Limit the child's value and size to the paren's value and size"
-  (cond ((> (+ value size) 1) (- 1 size))
-        ((< (- value size) 0) size)
-        (t value)))
 
 (defun poimap--collect-pois (window)
   "Collect points of interest from `poimap-interest-functions'."
@@ -384,28 +367,28 @@ Static string and number values are directly inserted."
 (defun poimap-circle (pos vert size color)
   "Return SVG for a filled circle at POS and VERT with SIZE and COLOR.
 SIZE is height-relative."
-  (poimap--svg-circle (poimap--percent-from-factor pos)
-                      (poimap--percent-from-factor vert)
+  (poimap--svg-circle (poimap--percent pos)
+                      (poimap--percent vert)
                       (number-to-string size)
                       color))
 
-(defun poimap-hrect (pos vert size color)
+(defun poimap-range (pos vert size color)
   (let* ((x1 (car pos))
          (x2 (cdr pos)))
-    (poimap--svg-rect-t (poimap--percent-from-factor x1)
-                        (poimap--percent-from-factor vert)
-                        (poimap--percent-from-factor (- x2 x1))
+    (poimap--svg-rect-t (poimap--percent x1)
+                        (poimap--percent vert)
+                        (poimap--percent (- x2 x1))
                         (number-to-string size)
                         color
                         (poimap-svg-ytranslate vert size))))
 
-(defun poimap-vrect (pos vert size color)
+(defun poimap-tick (pos vert size color)
   "Return SVG for a vertical line at POS and VERT with SIZE and COLOR.
 SIZE is a cons (ABSOLUTE-WIDTH . RELATIVE-HEIGHT)."
   (let* ((width  (car size))
          (height (cdr size)))
-    (poimap--svg-rect-t (poimap--percent-from-factor pos)
-                        (poimap--percent-from-factor vert)
+    (poimap--svg-rect-t (poimap--percent pos)
+                        (poimap--percent vert)
                         (number-to-string width)
                         (number-to-string height)
                         color
@@ -413,26 +396,109 @@ SIZE is a cons (ABSOLUTE-WIDTH . RELATIVE-HEIGHT)."
 
 (defvar-local poimap--pois nil)
 (defvar-local poimap--last-update 0)
+(defvar-local poimap--idle-update-timer nil
+  "Pending idle timer for `poimap--do-idle-update'.")
 
 ;; (unless (image-type-available-p 'svg)
 ;;   (user-error "This Emacs was built without SVG image support"))
 
+(defun poimap--poi-svg (window)
+  "Return SVG snippets for WINDOW's points of interest in the current buffer."
+  (let ((min-pos (point-min))
+        (max-pos (max (1+ (point-min)) (point-max)))
+        pois)
+    (dolist (poi (poimap--collect-pois window))
+      (let ((pos (poimap--poi-pos poi)))
+        (when (and pos
+                   (<= min-pos (if (consp pos) (car pos) pos))
+                   (<= (if (consp pos) (car pos) pos) max-pos))
+          (let* ((shape (or (and (consp poi) (plist-get poi :shape))
+                            #'poimap-circle))
+                 (map-pos (if (consp pos)
+                              (let* ((start (poimap--factor
+                                             (car pos) min-pos max-pos))
+                                     (end (poimap--factor
+                                           (cdr pos) min-pos max-pos)))
+                                (cons start
+                                      (if (< (- end start)
+                                             poimap-min-range-size)
+                                          (+ start poimap-min-range-size)
+                                        end)))
+                            (poimap--factor pos min-pos max-pos)))
+                 (vert (poimap--poi-vert poi))
+                 (size (poimap--poi-size poi)))
+            (push (funcall shape map-pos vert size (poimap--poi-color poi))
+                  pois)))))
+    (mapconcat #'identity (mapcan #'identity pois))))
+
+(defun poimap--request-idle-update (&optional window)
+  "Arrange for an idle POI update to run once for WINDOW's buffer."
+  (let ((buffer (current-buffer))
+        (window (or window (poimap--live-window window))))
+    (when (and window (not poimap--idle-update-timer))
+      (setq poimap--idle-update-timer
+            (run-with-idle-timer
+             0.1 nil
+             #'poimap--run-idle-update buffer window)))))
+
+(defun poimap--run-idle-update (buffer window)
+  "Run a pending idle update for BUFFER and WINDOW."
+  (when (buffer-live-p buffer)
+    (with-current-buffer buffer
+      ;; Clear first, so errors or re-requests do not leave us stuck forever.
+      (setq poimap--idle-update-timer nil)
+      (when-let ((window (poimap--live-window window)))
+        (poimap--do-idle-update window)))))
+
+(defun poimap--do-idle-update (window)
+  "Update cached points of interest for WINDOW's buffer."
+  (when (eq (window-buffer window) (current-buffer))
+    ;; Collecting POIs is the expensive part. Since updating them is not as
+    ;; urgent as the scroll position, abort as soon as new input arrives.  In
+    ;; that case, keep using the previous `poimap--pois'.
+    (let ((pois (save-selected-window
+                  (while-no-input
+                    (select-window window 'norecord)
+                    (list (poimap--poi-svg window))))))
+      (if (consp pois)
+          (progn
+            (setq poimap--pois (car pois))
+            (force-mode-line-update))
+        (poimap--request-idle-update window)))))
+
+(defun poimap--request-idle-update-for-command (&rest args)
+  "Request an idle update for the command's effective buffer."
+  (let ((window (if (minibufferp)
+                    (minibuffer-selected-window)
+                  (selected-window))))
+    (when (window-live-p window)
+      (with-current-buffer (window-buffer window)
+        (unless poimap--idle-update-timer
+          (poimap--request-idle-update window))))))
+
+(add-hook 'post-command-hook #'poimap--request-idle-update-for-command)
+;; FIXME !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+;; (remove-hook 'post-command-hook #'poimap--request-idle-update-for-command)
+
+(add-hook 'after-change-functions #'poimap--request-idle-update-for-command)
+;; (remove-hook 'after-change-functions #'poimap--request-idle-update-for-command)
+
 (defun poimap--svg (window width height)
   "Return an SVG object showing WINDOW's visible range in the current buffer."
-  ;; To keep scrolling responsive, we only update every 0.03 seconds if input is
-  ;; already pending.
+  ;; To keep scrolling responsive, we only update every 0.02 seconds max if
+  ;; input is already pending.
   (if-let (cache (and (input-pending-p)
                       ;; FIXME: sometimes we have to redraw (size of the bar changed etc).
                       (< (float-time (time-subtract (current-time)
                                                     poimap--last-update))
-                         0.03)
+                         0.02)
                       (window-parameter window 'poimap-cache)))
       ;; We simply return the old svg.
       cache
 
     ;; Otherwise we do the real work and redraw the bar.
     (setq poimap--last-update (current-time)) ;; FIXME window param
-    (let* ((border-outer 1)
+    (let* ((border-outer 1) ;; FIXME
            (content-width  (- width (* 2 border-outer)))
            (content-height (- height (* 2 border-outer)))
            (min-pos (point-min))
@@ -440,42 +506,9 @@ SIZE is a cons (ABSOLUTE-WIDTH . RELATIVE-HEIGHT)."
            (visible-start (poimap--clamp (window-start window) min-pos max-pos))
            (visible-end (poimap--clamp (window-end window) min-pos max-pos))
            (point-pos (poimap--clamp (point) min-pos max-pos))
-           (visible-width (- visible-end visible-start))
-           (pois))
-      (unless
-          ;; Collecting POIs is the expensive part. Since updating them is not
-          ;; as urgent as the scroll position, we abort as soon as new input
-          ;; arrives. We'll use the previous saved POIs in such a case.
-          (save-selected-window
-            (while-no-input
-              (dolist (poi (poimap--collect-pois window))
-                (let ((pos (poimap--poi-pos poi)))
-                  (when (and pos
-                             (<= min-pos (if (consp pos) (car pos) pos))
-                             (<= (if (consp pos) (car pos) pos) max-pos))
-                    (let* ((shape (or (and (consp poi) (plist-get poi :shape))
-                                      #'poimap-circle))
-                           (map-pos (if (consp pos)
-                                        (let* ((start (poimap--factor
-                                                       (car pos) min-pos max-pos))
-                                               (end (poimap--factor
-                                                     (cdr pos) min-pos max-pos)))
-                                          (cons start
-                                                (if (< (- end start)
-                                                       poimap-min-range-size)
-                                                    (+ start poimap-min-range-size)
-                                                  end)))
-                                      (poimap--factor pos min-pos max-pos)))
-                           (vert (poimap--poi-vert poi))
-                           (size (poimap--poi-size poi)))
-                      (push (funcall shape map-pos vert size (poimap--poi-color poi))
-                            pois)))))
-              (setq pois (mapconcat #'identity (mapcan #'identity pois)))
-              nil))
-        (setq poimap--pois pois))
-
-      ;; Now we make the new svg with the current scroll position -- either with
-      ;; newly calculated `poimap--pois' or with an old value.
+           (visible-width (- visible-end visible-start)))
+      ;; Now we make the new svg with the current scroll position and the most
+      ;; recently cached `poimap--pois'.
       (set-window-parameter
        window 'poimap-cache
        (apply #'concat
@@ -495,11 +528,13 @@ SIZE is a cons (ABSOLUTE-WIDTH . RELATIVE-HEIGHT)."
                                        (number-to-string content-width)
                                        (number-to-string content-height))
                ;; Visible window rectangle.
-               (poimap--svg-rect (poimap--percent visible-start min-pos max-pos)
+               (let ((vstart (poimap--factor visible-start min-pos max-pos))
+                     (vend   (poimap--factor visible-end   min-pos max-pos)))
+                (poimap--svg-rect (poimap--percent vstart)
                                  "0"
-                                 (poimap--percent visible-width 0 max-pos)
+                                 (poimap--percent (- vend vstart))
                                  (number-to-string content-height)
-                                 poimap-visible)
+                                 poimap-visible))
                ;; Points of interest.
                (list poimap--pois)
                ;; Point marker.
@@ -507,7 +542,7 @@ SIZE is a cons (ABSOLUTE-WIDTH . RELATIVE-HEIGHT)."
                                                      (- point-pos min-pos))
                                                   (- max-pos min-pos))))))
                  (poimap--svg-line x "0" x (number-to-string content-height)
-                                   poimap-point "2"))
+                                   poimap-point "2")) ;; FIXME
                (poimap--svg-inner-close)
                (poimap--svg-root-close)))))))
 
@@ -644,6 +679,7 @@ SIZE is a cons (ABSOLUTE-WIDTH . RELATIVE-HEIGHT)."
             (push (list :shape #'poimap-circle
                         :pos (match-beginning 0)
                         :vert 0.65
+                        :size 3
                         :color poimap--poi-default-color)
                   positions)
             ;; Protect against zero-length regex matches.
@@ -658,21 +694,21 @@ SIZE is a cons (ABSOLUTE-WIDTH . RELATIVE-HEIGHT)."
       (when-let (type (overlay-get ov 'diff-hl-hunk-type))
         (cond
          ((eq type 'insert)
-          (push (list :shape #'poimap-hrect
+          (push (list :shape #'poimap-range
                       :pos (cons (overlay-start ov) (overlay-end ov))
                       :vert 1.0
                       :color poimap--poi-diff-hl-insert
                       :size 6)
                 pois))
          ((eq type 'change)
-          (push (list :shape #'poimap-hrect
+          (push (list :shape #'poimap-range
                       :pos (cons (overlay-start ov) (overlay-end ov))
                       :vert 1.0
                       :color poimap--poi-diff-hl-change
                       :size 6)
                 pois))
          ((eq type 'delete)
-          (push (list :shape #'poimap-vrect
+          (push (list :shape #'poimap-tick
                       :pos (overlay-start ov)
                       :vert 1.0
                       :color poimap--poi-diff-hl-delete
@@ -683,7 +719,8 @@ SIZE is a cons (ABSOLUTE-WIDTH . RELATIVE-HEIGHT)."
 (defun poimap-imenu-items (_window)
   "Returns POIs for Imenu items."
   (let ((pois)
-        (index (ignore-errors (imenu--make-index-alist t))))
+        (index (ignore-errors (let ((imenu-auto-rescan nil))
+                                (imenu--make-index-alist t)))))
     (unless (> (length index) 1000) ;; FIXME
       (cl-labels
           ((walk (items)
@@ -697,7 +734,7 @@ SIZE is a cons (ABSOLUTE-WIDTH . RELATIVE-HEIGHT)."
                                                             (car item)))
                                     (cdr item)))
                    (when (or (markerp pos) (numberp pos))
-                     (push (list :shape #'poimap-vrect
+                     (push (list :shape #'poimap-tick
                                  :pos pos
                                  :vert 0.0
                                  :color poimap--poi-imenu
@@ -708,17 +745,35 @@ SIZE is a cons (ABSOLUTE-WIDTH . RELATIVE-HEIGHT)."
         (walk index)
         (nreverse pois)))))
 
-(defun poimap-overlays-with-property (_window property &optional color size)
-  "Return POIs for overlays that have PROPERTY."
-  (let (pois)
-    (dolist (ov (overlays-in (point-min) (point-max)))
-      (when (overlay-get ov property)
-        (push (list :shape #'poimap-circle
-                    :pos (overlay-start ov)
-                    :color (or color poimap--poi-default-color)
-                    :size (or size poimap-interest-size))
-              pois)))
-    (nreverse pois)))
+(defvar poimap--imenu-refresh-ticks (make-hash-table :test #'eq)
+  "Last observed modification tick for each visible buffer.")
+
+(defvar poimap--imenu-refresh-idle-timer nil)
+
+(defun poimap--imenu-refresh ()
+  "Process visible buffers whose text changed since the previous check."
+  (while-no-input
+    (let ((visible-buffers
+           (delete-dups
+            (mapcar #'window-buffer
+                    (window-list-1 nil 'no-minibuffer t)))))
+      (dolist (buffer visible-buffers)
+        (when (buffer-live-p buffer)
+          (with-current-buffer buffer
+            (let* ((current-tick (buffer-chars-modified-tick))
+                   (previous-tick
+                    (gethash buffer poimap--imenu-refresh-ticks current-tick)))
+              (puthash buffer current-tick poimap--imenu-refresh-ticks)
+              (unless (= current-tick previous-tick)
+                (ignore-errors (let ((imenu-auto-rescan t))
+                                 (imenu--make-index-alist t)))))))))))
+
+(setq poimap--imenu-refresh-idle-timer
+      (run-with-idle-timer
+       5 t
+       #'poimap--imenu-refresh))
+;; FIXME
+;; (cancel-timer poimap--imenu-refresh-idle-timer)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -759,6 +814,7 @@ SIZE is a cons (ABSOLUTE-WIDTH . RELATIVE-HEIGHT)."
              (list :shape #'poimap-circle
                    :pos  (line-beginning-position)
                    :vert 0.65
+                   :size 3
                    :color poimap--poi-default-color))))
        ivy--old-cands))))
 

@@ -438,14 +438,19 @@ WINDOW is set as `poimap--last-window' if not nil."
 ;; (remove-hook 'post-command-hook #'poimap--request-idle-update-for-command)
 
 (defun poimap--request-idle-update-for-buffer-text-change (&rest args)
-  "Request an update for a buffer text change."
+  "Request an update for a buffer text change.
+This requests a normal (\"unforced\") idle update of POIs. This means POIs that
+react on update without the force parameter set are refreshed."
   (poimap--request-idle-update t))
 
 (add-hook 'after-change-functions
           #'poimap--request-idle-update-for-buffer-text-change)
 
 (defun poimap--request-idle-update-for-window-buffer-change (frame)
-  "Request an update for a window buffer change."
+  "Request an update for a window buffer change.
+We may have a new buffer or a buffer that hasn't been displayed for a long time;
+so request a force (i.e., complete) update of all POIs.  This is fine since this
+doesn't happen too often."
   (dolist (window (window-list frame 'no-minibuffer))
     (unless (eq (window-old-buffer window)
                 (window-buffer window))
@@ -454,6 +459,18 @@ WINDOW is set as `poimap--last-window' if not nil."
 
 (add-hook 'window-buffer-change-functions
           #'poimap--request-idle-update-for-window-buffer-change)
+
+(defun poimap--request-idle-update-for-window-selection-change (frame)
+  "Request an update for a window selection change.
+This requests a normal (\"unforced\") idle update of POIs."
+  (dolist (window (window-list frame 'no-minibuf))
+    ;; We cannot filter the windows that actually changed, specifically not
+    ;; the deselected window.  Thus, update all windows (we don't force).
+    (with-current-buffer (window-buffer window)
+      (poimap--request-idle-update nil window))))
+
+(add-hook 'window-selection-change-functions
+          #'poimap--request-idle-update-for-window-selection-change)
 
 (defvar-local poimap--last-update 0
   "Last complete update of poimap--svg")

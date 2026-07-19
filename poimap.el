@@ -480,24 +480,23 @@ This requests a normal (\"unforced\") idle update of POIs."
 (add-hook 'window-selection-change-functions
           #'poimap--request-idle-update-for-window-selection-change)
 
-(defvar-local poimap--last-update 0
-  "Last complete update of poimap--svg")
-
 (defun poimap--svg (window width height)
   "Return an SVG object showing WINDOW's visible range in the current buffer."
   ;; To keep scrolling responsive, we only update every 0.02 seconds max if
   ;; input is already pending.
   (if-let (cache (and (input-pending-p)
                       ;; FIXME: sometimes we have to redraw (size of the bar changed etc).
-                      (< (float-time (time-subtract (current-time)
-                                                    poimap--last-update))
+                      (< (float-time
+                          (time-subtract
+                           (current-time)
+                           (or (window-parameter window 'poimap-last-update) 0)))
                          0.02)
                       (window-parameter window 'poimap-cache)))
       ;; We simply return the old svg.
       cache
 
     ;; Otherwise we do the real work and redraw the bar.
-    (setq poimap--last-update (current-time)) ;; FIXME window param
+    (set-window-parameter window 'poimap-last-update (current-time))
     (let* ((border-outer 1) ;; FIXME
            (content-width  (- width (* 2 border-outer)))
            (content-height (- height (* 2 border-outer)))

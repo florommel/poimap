@@ -141,29 +141,12 @@ foreground is used for the in-window area."
 
 (defcustom poimap-interest-functions
   '(poimap-isearch-pois poimap-imenu-items poimap-diff-hl-pois)
-  "Functions that return points of interest for the current buffer.
+  "Functions that return point-of-interest SVG for the current buffer.
 
-Each function is called with no arguments in the current buffer and should
-return a list.  Each element is a plist:
-
-  (:shape SHAPE :pos POS :vert VERT :color COLOR :size SIZE)
-
-SHAPE is a function called with the POI's position in the map (SVG coordinates
-calculated from POS), the POIs vertical position (SVG coordinates, calculated
-from VERT), size, and color.
-
-POS may be an integer buffer position, a marker, or a cons (START . END) of
-positions for range shapes.
-
-VERT is the vertical position of the POI relative to the height of the bar
-(between 0 and 1).
-
-COLOR is the color of the mark.
-
-SIZE is the shape size.  The type is up to the SHAPE function.  Usually it is
-either a single number which is interpreted as absolute or height-relative size
-or a cons (WIDTH . HEIGHT) where WIDTH is an absolute value and HEIGHT is a
-bar-height-relative value."
+Each function is called with WINDOW as its only argument in the current buffer
+and should return an SVG string, usually by calling shape functions such as
+`poimap-circle', `poimap-range', or `poimap-tick' and joining the results with
+`mapconcat'."
   :type 'hook
   :group 'poimap)
 
@@ -191,43 +174,6 @@ bar-height-relative value."
 (defun poimap--position-value (pos)
   "Return POS as a buffer position value."
   (if (markerp pos) (marker-position pos) pos))
-
-(defun poimap--poi-pos (poi)
-  "Return POI's buffer position, or nil."
-  (cond
-   ((or (integerp poi) (markerp poi)) (poimap--position-value poi))
-   ((and (consp poi) (plist-get poi :pos))
-    (let ((pos (plist-get poi :pos)))
-      (if (consp pos)
-          (cons (poimap--position-value (car pos))
-                (poimap--position-value (cdr pos)))
-        (poimap--position-value pos))))
-   (t nil)))
-
-(defun poimap--poi-color (poi)
-  "Return POI's display color."
-  (or (and (consp poi) (plist-get poi :color))
-      poimap--poi-default-color))
-
-(defun poimap--poi-size (poi)
-  "Return POI's display size."
-  (or (and (consp poi) (plist-get poi :size))
-      poimap-interest-size))
-
-(defun poimap--poi-vert (poi)
-  "Return POI's display vertical position."
-  (or (and (consp poi) (plist-get poi :vert)) 0.5))
-
-(defun poimap--collect-pois (window)
-  "Collect points of interest from `poimap-interest-functions'."
-  (cl-loop for fn in poimap-interest-functions
-           when (functionp fn)
-           append (condition-case err
-                      (funcall fn window)
-                    (error
-                     (message "poimap: POI function %S failed: %s"
-                              fn (error-message-string err))
-                     nil))))
 
 (defmacro poimap--svg-template (name tag attrs)
   "Define NAME as a simple SVG element list builder macro.
@@ -394,7 +340,8 @@ SIZE is a cons (ABSOLUTE-WIDTH . RELATIVE-HEIGHT)."
                         color
                         (poimap-svg-ytranslate vert height))))
 
-(defvar-local poimap--pois nil)
+(defvar-local poimap--pois nil
+  "Alist mapping POI interest functions to their cached SVG strings.")
 (defvar-local poimap--last-update 0)
 (defvar-local poimap--idle-update-timer nil
   "Pending idle timer for `poimap--do-idle-update'.")
@@ -402,34 +349,40 @@ SIZE is a cons (ABSOLUTE-WIDTH . RELATIVE-HEIGHT)."
 ;; (unless (image-type-available-p 'svg)
 ;;   (user-error "This Emacs was built without SVG image support"))
 
-(defun poimap--poi-svg (window)
-  "Return SVG snippets for WINDOW's points of interest in the current buffer."
-  (let ((min-pos (point-min))
-        (max-pos (max (1+ (point-min)) (point-max)))
-        pois)
-    (dolist (poi (poimap--collect-pois window))
-      (let ((pos (poimap--poi-pos poi)))
-        (when (and pos
-                   (<= min-pos (if (consp pos) (car pos) pos))
-                   (<= (if (consp pos) (car pos) pos) max-pos))
-          (let* ((shape (or (and (consp poi) (plist-get poi :shape))
-                            #'poimap-circle))
-                 (map-pos (if (consp pos)
-                              (let* ((start (poimap--factor
-                                             (car pos) min-pos max-pos))
-                                     (end (poimap--factor
-                                           (cdr pos) min-pos max-pos)))
-                                (cons start
-                                      (if (< (- end start)
-                                             poimap-min-range-size)
-                                          (+ start poimap-min-range-size)
-                                        end)))
-                            (poimap--factor pos min-pos max-pos)))
-                 (vert (poimap--poi-vert poi))
-                 (size (poimap--poi-size poi)))
-            (push (funcall shape map-pos vert size (poimap--poi-color poi))
-                  pois)))))
-    (mapconcat #'identity (mapcan #'identity pois))))
+(defun poimap-map-position (pos)
+  "Return POS converted to a horizontal SVG map position.
+POS may be an integer buffer position, a marker, or a cons (START . END) of
+positions for range shapes.  Range shapes are widened to `poimap-min-range-size'
+if necessary.  Return nil when POS starts outside the buffer."
+  (let* ((min-pos (point-min))
+         (max-pos (max (1+ min-pos) (point-max)))
+         (pos (if (consp pos)
+                  (cons (poimap--position-value (car pos))
+                        (poimap--position-value (cdr pos)))
+                (poimap--position-value pos)))
+         (start (if (consp pos) (car pos) pos)))
+    (when (and pos (<= min-pos start) (<= start max-pos))
+      (if (consp pos)
+          (let* ((map-start (poimap--factor (car pos) min-pos max-pos))
+                 (map-end   (poimap--factor (cdr pos) min-pos max-pos)))
+            (cons map-start
+                  (if (< (- map-end map-start) poimap-min-range-size)
+                      (+ map-start poimap-min-range-size)
+                    map-end)))
+        (poimap--factor pos min-pos max-pos)))))
+
+(defun poimap--update-pois (window)
+  "Update `poimap--pois' by invoking `poimap-interest-functions' for WINDOW."
+  (dolist (fn poimap-interest-functions)
+    (when (functionp fn)
+      (setf (alist-get fn poimap--pois)
+            (or (condition-case err
+                    (funcall fn window)
+                  (error
+                   (message "poimap: POI function %S failed: %s"
+                            fn (error-message-string err))
+                   nil))
+                "")))))
 
 (defun poimap--request-idle-update (&optional window)
   "Arrange for an idle POI update to run once for WINDOW's buffer."
@@ -454,16 +407,15 @@ SIZE is a cons (ABSOLUTE-WIDTH . RELATIVE-HEIGHT)."
   "Update cached points of interest for WINDOW's buffer."
   (when (eq (window-buffer window) (current-buffer))
     ;; Collecting POIs is the expensive part. Since updating them is not as
-    ;; urgent as the scroll position, abort as soon as new input arrives.  In
-    ;; that case, keep using the previous `poimap--pois'.
+    ;; urgent as the scroll position, abort as soon as new input arrives and
+    ;; request another idle update.
     (let ((pois (save-selected-window
                   (while-no-input
                     (select-window window 'norecord)
-                    (list (poimap--poi-svg window))))))
-      (if (consp pois)
-          (progn
-            (setq poimap--pois (car pois))
-            (force-mode-line-update))
+                    (poimap--update-pois window)
+                    'update))))
+      (if (eq pois 'update)
+          (force-mode-line-update)
         (poimap--request-idle-update window)))))
 
 (defun poimap--request-idle-update-for-command (&rest args)
@@ -536,7 +488,8 @@ SIZE is a cons (ABSOLUTE-WIDTH . RELATIVE-HEIGHT)."
                                  (number-to-string content-height)
                                  poimap-visible))
                ;; Points of interest.
-               (list poimap--pois)
+               (mapcar (lambda (fn) (or (alist-get fn poimap--pois) ""))
+                       poimap-interest-functions)
                ;; Point marker.
                (let ((x (number-to-string (+ 1 (/ (* 1.0 (- content-width 2)
                                                      (- point-pos min-pos))
@@ -658,7 +611,7 @@ SIZE is a cons (ABSOLUTE-WIDTH . RELATIVE-HEIGHT)."
                     (setq done t))))))))))))
 
 (defun poimap-isearch-pois (_window)
-  "Return POIs for active isearch matches in the current buffer."
+  "Return SVG for active isearch matches in the current buffer."
   (when (and (bound-and-true-p isearch-mode)
              (boundp 'isearch-string)
              (stringp isearch-string)
@@ -672,53 +625,40 @@ SIZE is a cons (ABSOLUTE-WIDTH . RELATIVE-HEIGHT)."
               (regexp (if (and (boundp 'isearch-regexp) isearch-regexp)
                           isearch-string
                         (regexp-quote isearch-string)))
-              positions)
+              svg)
           (goto-char (point-min))
           (while (and (not (eobp))
                       (re-search-forward regexp nil t))
-            (push (list :shape #'poimap-circle
-                        :pos (match-beginning 0)
-                        :vert 0.65
-                        :size 3
-                        :color poimap--poi-default-color)
-                  positions)
+            (when-let (pos (poimap-map-position (match-beginning 0)))
+              (push (poimap-circle pos 0.65 3 poimap--poi-default-color) svg))
             ;; Protect against zero-length regex matches.
             (when (= (match-beginning 0) (match-end 0))
               (forward-char 1)))
-          (nreverse positions))))))
+          (mapconcat #'identity (mapcan #'identity (nreverse svg))))))))
 
 (defun poimap-diff-hl-pois (_window)
-  "Return POIs diff-hl markers"
-  (let (pois)
+  "Return SVG for diff-hl markers."
+  (let (svg)
     (dolist (ov (overlays-in (point-min) (point-max)))
       (when-let (type (overlay-get ov 'diff-hl-hunk-type))
         (cond
          ((eq type 'insert)
-          (push (list :shape #'poimap-range
-                      :pos (cons (overlay-start ov) (overlay-end ov))
-                      :vert 1.0
-                      :color poimap--poi-diff-hl-insert
-                      :size 6)
-                pois))
+          (when-let (pos (poimap-map-position
+                          (cons (overlay-start ov) (overlay-end ov))))
+            (push (poimap-range pos 1.0 6 poimap--poi-diff-hl-insert) svg)))
          ((eq type 'change)
-          (push (list :shape #'poimap-range
-                      :pos (cons (overlay-start ov) (overlay-end ov))
-                      :vert 1.0
-                      :color poimap--poi-diff-hl-change
-                      :size 6)
-                pois))
+          (when-let (pos (poimap-map-position
+                          (cons (overlay-start ov) (overlay-end ov))))
+            (push (poimap-range pos 1.0 6 poimap--poi-diff-hl-change) svg)))
          ((eq type 'delete)
-          (push (list :shape #'poimap-tick
-                      :pos (overlay-start ov)
-                      :vert 1.0
-                      :color poimap--poi-diff-hl-delete
-                      :size (cons 4 6))
-                pois)))))
-    (nreverse pois)))
+          (when-let (pos (poimap-map-position (overlay-start ov)))
+            (push (poimap-tick pos 1.0 (cons 4 6) poimap--poi-diff-hl-delete)
+                  svg))))))
+    (mapconcat #'identity (mapcan #'identity (nreverse svg)))))
 
 (defun poimap-imenu-items (_window)
-  "Returns POIs for Imenu items."
-  (let ((pois)
+  "Return SVG for Imenu items."
+  (let ((svg)
         (index (ignore-errors (let ((imenu-auto-rescan nil))
                                 (imenu--make-index-alist t)))))
     (unless (> (length index) 1000) ;; FIXME
@@ -734,16 +674,13 @@ SIZE is a cons (ABSOLUTE-WIDTH . RELATIVE-HEIGHT)."
                                                             (car item)))
                                     (cdr item)))
                    (when (or (markerp pos) (numberp pos))
-                     (push (list :shape #'poimap-tick
-                                 :pos pos
-                                 :vert 0.0
-                                 :color poimap--poi-imenu
-                                 :size (cons 2 8))
-                           pois))))
+                     (when-let (map-pos (poimap-map-position pos))
+                       (push (poimap-tick map-pos 0.0 (cons 2 8) poimap--poi-imenu)
+                             svg)))))
                (when (imenu--subalist-p item)
                  (walk (cdr item))))))
         (walk index)
-        (nreverse pois)))))
+        (mapconcat #'identity (mapcan #'identity (nreverse svg)))))))
 
 (defvar poimap--imenu-refresh-ticks (make-hash-table :test #'eq)
   "Last observed modification tick for each visible buffer.")
@@ -793,7 +730,7 @@ SIZE is a cons (ABSOLUTE-WIDTH . RELATIVE-HEIGHT)."
 (require 'ivy)
 
 (defun my/swiper-current-matches (_window)
-  "Return POIs for current `swiper' matches."
+  "Return SVG for current `swiper' matches."
   (when (and (fboundp 'ivy-state-caller)
              (fboundp 'ivy--get-window)
              (boundp 'ivy-last)
@@ -805,21 +742,23 @@ SIZE is a cons (ABSOLUTE-WIDTH . RELATIVE-HEIGHT)."
              (eq (ivy-state-caller ivy-last) 'swiper)
              (< (length ivy--old-cands) 1000))
     (with-ivy-window
-      (mapcar
-       (lambda (cand)
-         (let ((line (swiper--line-number cand)))
-           (save-excursion
-             (goto-char (point-min))
-             (forward-line (1- line))
-             (list :shape #'poimap-circle
-                   :pos  (line-beginning-position)
-                   :vert 0.65
-                   :size 3
-                   :color poimap--poi-default-color))))
-       ivy--old-cands))))
+      (mapconcat
+       #'identity
+       (mapcan
+        #'identity
+        (delq nil
+              (mapcar
+               (lambda (cand)
+                 (let ((line (swiper--line-number cand)))
+                   (save-excursion
+                     (goto-char (point-min))
+                     (forward-line (1- line))
+                     (when-let (pos (poimap-map-position (line-beginning-position)))
+                       (poimap-circle pos 0.65 3 poimap--poi-default-color)))))
+               ivy--old-cands)))))))
 
 (defun my/poimap-current-symbol (window)
-  "Return a list of start positions of all occurrences of the symbol at point.
+  "Return SVG for all occurrences of the symbol at point.
 
 Return nil if there is no symbol under point."
   (when (and (< (point-max) 4194304)
@@ -830,7 +769,7 @@ Return nil if there is no symbol under point."
 		     (car bounds)
 		     (cdr bounds)))
 	    (case-fold-search nil)
-	    pois)
+	    svg)
 	(save-excursion
 	  (save-restriction
 	    (widen)
@@ -838,24 +777,17 @@ Return nil if there is no symbol under point."
 	    (while (re-search-forward
 		    (concat "\\_<" (regexp-quote symbol) "\\_>")
 		    nil t)
-	      (push (list :shape #'poimap-circle
-                          :pos (match-beginning 0)
-                          :vert 0.65
-                          :color "#bbbbbb")
-                    pois))))
-	(nreverse pois)))))
+              (when-let (pos (poimap-map-position (match-beginning 0)))
+                (push (poimap-circle pos 0.65 3 "#bbbbbb") svg)))))
+	(mapconcat #'identity (mapcan #'identity (nreverse svg)))))))
 
 (defun my/poimap-bms (_window)
-  "Return POIs for bm bookmarks."
-  (let (pois)
+  "Return SVG for bm bookmarks."
+  (let (svg)
     (dolist (ov (bm-overlay-in-buffer))
-      (push (list :shape #'poimap-circle
-                  :pos (overlay-start ov)
-                  :vert 0.4
-                  :color "#e4a3ff"
-                  :size 4)
-            pois))
-    (nreverse pois)))
+      (when-let (pos (poimap-map-position (overlay-start ov)))
+        (push (poimap-circle pos 0.4 4 "#e4a3ff") svg)))
+    (mapconcat #'identity (mapcan #'identity (nreverse svg)))))
 
 ;; (require 'vertico)
 ;; (require 'consult)

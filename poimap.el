@@ -94,6 +94,11 @@ foreground is used for the in-window area."
   :type 'string
   :group 'poimap)
 
+(defcustom poimap-border-width 1
+  "Border width of the poimap rectangle"
+  :type 'number
+  :group 'poimap)
+
 (defcustom poimap-visible "#ffffff28"
   "Fill color for the visible-window rectangle."
   :type 'string
@@ -497,7 +502,7 @@ This requests a normal (\"unforced\") idle update of POIs."
 
     ;; Otherwise we do the real work and redraw the bar.
     (set-window-parameter window 'poimap-last-update (current-time))
-    (let* ((border-outer 1) ;; FIXME
+    (let* ((border-outer poimap-border-width)
            (content-width  (- width (* 2 border-outer)))
            (content-height (- height (* 2 border-outer)))
            (min-pos (point-min))

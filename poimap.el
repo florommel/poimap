@@ -149,30 +149,38 @@ usually by calling shape functions such as `poimap-circle', `poimap-range', or
   :type 'hook
   :group 'poimap)
 
-(defun poimap--live-window (&optional window)
+(define-inline poimap--live-window (&optional window)
   "Return a reasonable window for the current buffer."
-  (let ((window (or window (selected-window))))
-    (or (and (window-live-p window)
-             (eq (window-buffer window) (current-buffer))
-             window)
-        (get-buffer-window (current-buffer) 'visible))))
+  (inline-quote
+   (let ((window (or ,window (selected-window))))
+     (or (and (window-live-p window)
+              (eq (window-buffer window) (current-buffer))
+              window)
+         (get-buffer-window (current-buffer) 'visible)))))
 
-(defun poimap--clamp (value low high)
+(define-inline poimap--clamp (value low high)
   "Clamp VALUE between LOW and HIGH."
-  (min high (max low value)))
+  (inline-quote
+   (min ,high (max ,low ,value))))
 
-(defun poimap--factor (pos min-pos max-pos)
+(define-inline poimap--factor (pos min-pos max-pos)
   "Convert POS between MIN-POS/MAX-POS to a numeric percent."
-  (/ (* 1.0 (- pos min-pos))
-     (- max-pos min-pos)))
+  (inline-quote
+   (/ (* 1.0 (- ,pos ,min-pos))
+      (- ,max-pos ,min-pos))))
 
-(defun poimap--percent (factor)
-  "Return PERCENT as an SVG percent string."
-  (concat (number-to-string (* 100 factor)) "%"))
+(define-inline poimap--percent (factor)
+  "Return FACTOR as an SVG percent string."
+  (inline-quote
+   (concat (number-to-string (* 100 ,factor)) "%")))
 
-(defun poimap--position-value (pos)
+(define-inline poimap--position-value (pos)
   "Return POS as a buffer position value."
-  (if (markerp pos) (marker-position pos) pos))
+  (inline-letevals (pos)
+    (inline-quote
+     (if (markerp ,pos)
+         (marker-position ,pos)
+       ,pos))))
 
 (defmacro poimap--svg-template (name tag attrs)
   "Define NAME as a simple SVG element list builder macro.
@@ -574,9 +582,10 @@ This requests a normal (\"unforced\") idle update of POIs."
         (set-window-parameter window 'poimap-width bar-width)
         (if poimap-align-right
             (list
-             (propertize " "
-                         'display (list 'space :align-to `(- (+ right right-margin)
-                                                             (,(1+ bar-width)))))  ;; FIXME 1+ -> border
+             (propertize " " 'display (list
+                                       'space
+                                       :align-to `(- (+ right right-margin)
+                                                     (,(1+ bar-width)))))  ;; FIXME 1+ -> border
              bar)
           bar))))
 

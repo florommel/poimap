@@ -143,10 +143,9 @@ foreground is used for the in-window area."
   '(poimap-isearch-pois poimap-imenu-items poimap-diff-hl-pois)
   "Functions that return point-of-interest SVG for the current buffer.
 
-Each function is called with WINDOW as its only argument in the current buffer
-and should return an SVG string, usually by calling shape functions such as
-`poimap-circle', `poimap-range', or `poimap-tick' and joining the results with
-`mapconcat'."
+Each function is called in the current buffer and should return an SVG string,
+usually by calling shape functions such as `poimap-circle', `poimap-range', or
+`poimap-tick' and joining the results to a single string."
   :type 'hook
   :group 'poimap)
 
@@ -342,9 +341,14 @@ SIZE is a cons (ABSOLUTE-WIDTH . RELATIVE-HEIGHT)."
 
 (defvar-local poimap--pois nil
   "Alist mapping POI interest functions to their cached SVG strings.")
-(defvar-local poimap--last-update 0)
 (defvar-local poimap--idle-update-timer nil
-  "Pending idle timer for `poimap--do-idle-update'.")
+  "Pending idle timer for `poimap--run-idle-update'.")
+(defvar-local poimap--last-update-window nil
+  "The last window that triggered an idle POI update in this buffer")
+
+(defun poimap-last-update-window ()
+  "Get the window that triggered an idle POI update in the current buffer"
+  poimap--last-update-window)
 
 ;; (unless (image-type-available-p 'svg)
 ;;   (user-error "This Emacs was built without SVG image support"))
@@ -371,62 +375,54 @@ if necessary.  Return nil when POS starts outside the buffer."
                     map-end)))
         (poimap--factor pos min-pos max-pos)))))
 
-(defun poimap--update-pois (window)
+(defun poimap--idle-update-buffer-pois ()
   "Update `poimap--pois' by invoking `poimap-interest-functions' for WINDOW."
   (dolist (fn poimap-interest-functions)
     (when (functionp fn)
       (setf (alist-get fn poimap--pois)
             (or (condition-case err
-                    (funcall fn window)
+                    (funcall fn)
                   (error
                    (message "poimap: POI function %S failed: %s"
                             fn (error-message-string err))
                    nil))
                 "")))))
 
-(defun poimap--request-idle-update (&optional window)
-  "Arrange for an idle POI update to run once for WINDOW's buffer."
-  (let ((buffer (current-buffer))
-        (window (or window (poimap--live-window window))))
-    (when (and window (not poimap--idle-update-timer))
-      (setq poimap--idle-update-timer
-            (run-with-idle-timer
-             0.1 nil
-             #'poimap--run-idle-update buffer window)))))
-
-(defun poimap--run-idle-update (buffer window)
+(defun poimap--run-idle-update (buffer)
   "Run a pending idle update for BUFFER and WINDOW."
   (when (buffer-live-p buffer)
     (with-current-buffer buffer
       ;; Clear first, so errors or re-requests do not leave us stuck forever.
       (setq poimap--idle-update-timer nil)
-      (when-let ((window (poimap--live-window window)))
-        (poimap--do-idle-update window)))))
-
-(defun poimap--do-idle-update (window)
-  "Update cached points of interest for WINDOW's buffer."
-  (when (eq (window-buffer window) (current-buffer))
-    ;; Collecting POIs is the expensive part. Since updating them is not as
-    ;; urgent as the scroll position, abort as soon as new input arrives and
-    ;; request another idle update.
-    (let ((pois (save-selected-window
-                  (while-no-input
-                    (select-window window 'norecord)
-                    (poimap--update-pois window)
-                    'update))))
+      ;; Collecting POIs is the expensive part. Since updating them is not as
+      ;; urgent as the scroll position, abort as soon as new input arrives and
+      ;; request another idle update.
+      (let ((pois (while-no-input
+                    (poimap--idle-update-buffer-pois)
+                    'update)))
       (if (eq pois 'update)
           (force-mode-line-update)
-        (poimap--request-idle-update window)))))
+        (poimap--request-idle-update))))))
+
+(defun poimap--request-idle-update (&optional window)
+  "Arrange for an idle POI update for the current buffer.
+WINDOW is set as `poimap--last-window' if not nil."
+  (when window
+    (setq poimap--last-window window))
+  (unless poimap--idle-update-timer
+    (setq poimap--idle-update-timer
+          (run-with-idle-timer
+           0.1 nil
+           #'poimap--run-idle-update (current-buffer)))))
 
 (defun poimap--request-idle-update-for-command (&rest args)
   "Request an idle update for the command's effective buffer."
-  (let ((window (if (minibufferp)
-                    (minibuffer-selected-window)
-                  (selected-window))))
-    (when (window-live-p window)
-      (with-current-buffer (window-buffer window)
-        (unless poimap--idle-update-timer
-          (poimap--request-idle-update window))))))
+  (let* ((window (if (minibufferp)
+                     (minibuffer-selected-window)
+                   (selected-window)))
+         (buffer (window-buffer window)))
+    (with-current-buffer buffer
+      (poimap--request-idle-update window))))
 
 (add-hook 'post-command-hook #'poimap--request-idle-update-for-command)
 ;; FIXME !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -434,6 +430,9 @@ if necessary.  Return nil when POS starts outside the buffer."
 
 (add-hook 'after-change-functions #'poimap--request-idle-update-for-command)
 ;; (remove-hook 'after-change-functions #'poimap--request-idle-update-for-command)
+
+(defvar-local poimap--last-update 0
+  "Last complete update of poimap--svg")
 
 (defun poimap--svg (window width height)
   "Return an SVG object showing WINDOW's visible range in the current buffer."
@@ -488,8 +487,7 @@ if necessary.  Return nil when POS starts outside the buffer."
                                  (number-to-string content-height)
                                  poimap-visible))
                ;; Points of interest.
-               (mapcar (lambda (fn) (or (alist-get fn poimap--pois) ""))
-                       poimap-interest-functions)
+               (mapcar #'cdr poimap--pois)
                ;; Point marker.
                (let ((x (number-to-string (+ 1 (/ (* 1.0 (- content-width 2)
                                                      (- point-pos min-pos))
@@ -610,7 +608,7 @@ if necessary.  Return nil when POS starts outside the buffer."
                     (push ev unread-command-events)
                     (setq done t))))))))))))
 
-(defun poimap-isearch-pois (_window)
+(defun poimap-isearch-pois ()
   "Return SVG for active isearch matches in the current buffer."
   (when (and (bound-and-true-p isearch-mode)
              (boundp 'isearch-string)
@@ -636,7 +634,7 @@ if necessary.  Return nil when POS starts outside the buffer."
               (forward-char 1)))
           (mapconcat #'identity (mapcan #'identity (nreverse svg))))))))
 
-(defun poimap-diff-hl-pois (_window)
+(defun poimap-diff-hl-pois ()
   "Return SVG for diff-hl markers."
   (let (svg)
     (dolist (ov (overlays-in (point-min) (point-max)))
@@ -656,7 +654,7 @@ if necessary.  Return nil when POS starts outside the buffer."
                   svg))))))
     (mapconcat #'identity (mapcan #'identity (nreverse svg)))))
 
-(defun poimap-imenu-items (_window)
+(defun poimap-imenu-items ()
   "Return SVG for Imenu items."
   (let ((svg)
         (index (ignore-errors (let ((imenu-auto-rescan nil))
@@ -729,18 +727,15 @@ if necessary.  Return nil when POS starts outside the buffer."
 (require 'swiper)
 (require 'ivy)
 
-(defun my/swiper-current-matches (_window)
+(defun my/swiper-current-matches ()
   "Return SVG for current `swiper' matches."
-  (when (and (fboundp 'ivy-state-caller)
-             (fboundp 'ivy--get-window)
-             (boundp 'ivy-last)
-             (boundp 'ivy--minibuffer)
-             (boundp 'ivy--old-cands)
-             (buffer-local-value 'ivy--minibuffer
+  (when (and (buffer-local-value 'ivy--minibuffer
                                  (window-buffer (active-minibuffer-window)))
-             (eq (selected-window) (ivy--get-window ivy-last))
              (eq (ivy-state-caller ivy-last) 'swiper)
              (< (length ivy--old-cands) 1000))
+             (or
+              (eq (current-buffer) (window-buffer (minibuffer-selected-window)))
+              (eq (current-buffer) (window-buffer (selected-window))))
     (with-ivy-window
       (mapconcat
        #'identity
@@ -762,6 +757,8 @@ if necessary.  Return nil when POS starts outside the buffer."
 
 Return nil if there is no symbol under point."
   (when (and (< (point-max) 4194304)
+             ;; FIXME FIXMEFIXMEFIXMEFIXMEFIXMEFIXMEFIXMEFIXMEFIXMEFIXMEFIXMEFIXMEFIXMEFIXMEFIXMEFIXMEFIXME
+             ;; Check if selected window is buffer!
 	     (eq (selected-window) window)
 	     (not (bound-and-true-p isearch-mode)))
     (when-let ((bounds (bounds-of-thing-at-point 'symbol)))
@@ -781,7 +778,7 @@ Return nil if there is no symbol under point."
                 (push (poimap-circle pos 0.65 3 "#bbbbbb") svg)))))
 	(mapconcat #'identity (mapcan #'identity (nreverse svg)))))))
 
-(defun my/poimap-bms (_window)
+(defun my/poimap-bms ()
   "Return SVG for bm bookmarks."
   (let (svg)
     (dolist (ov (bm-overlay-in-buffer))

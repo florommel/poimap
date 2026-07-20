@@ -84,7 +84,7 @@ Its background is used for the out-of-window area, and its
 foreground is used for the in-window area."
   :group 'poimap)
 
-(defcustom poimap-background "#1b1b1b66" ;; "#1b1b1ba0"
+(defcustom poimap-background "#1b1b1b66"
   "Fill color for the whole-buffer rectangle."
   :type 'string
   :group 'poimap)
@@ -107,6 +107,11 @@ foreground is used for the in-window area."
 (defcustom poimap-point "#ffffffd0"
   "Color of the point marker."
   :type 'string
+  :group 'poimap)
+
+(defcustom poimap-point-width 2
+  "Width of the point marker"
+  :type 'number
   :group 'poimap)
 
 (defcustom poimap--poi-default-color "#ffcc66"
@@ -251,7 +256,7 @@ Static string and number values are directly inserted."
            (close-tag (format "</%s>" tag-name))
            (close (concat open-end close-tag)))
       `(defmacro ,name ,args
-         ,(format "Return an SVG <%s> snippet as a list of string components."
+         ,(format "Return an SVG %s snippet as a list of string components."
                   tag-name)
          (list 'list ,@(nreverse pieces) ,close)))))
 
@@ -546,7 +551,8 @@ This requests a normal (\"unforced\") idle update of POIs."
                                                      (- point-pos min-pos))
                                                   (- max-pos min-pos))))))
                  (poimap--svg-line x "0" x (number-to-string content-height)
-                                   poimap-point "2")) ;; FIXME
+                                   poimap-point
+                                   (number-to-string poimap-point-width)))
                (poimap--svg-inner-close)
                (poimap--svg-root-close)))))))
 
@@ -566,7 +572,6 @@ This requests a normal (\"unforced\") idle update of POIs."
                                ((and h (pred integerp)) h)
                                ((and h (pred floatp))
                                 (round (* h (window-font-height window 'poimap-face))))
-                               ;; FIXME mode-line-window-selected-p, poimap-use-face ??
                                ((and h (pred functionp))
                                 (funcall h))
                                (_ (error "Invalid value for `poimap-height'")))))
@@ -790,7 +795,7 @@ This requests a normal (\"unforced\") idle update of POIs."
 (require 'swiper)
 (require 'ivy)
 
-;; FIXME: still leaks into other buffer if changed with an active session
+;; FIXME: Leaks into other buffer if changed with an active session
 (defun poimap-swiper-update (_force)
   "Return SVG for current `swiper' matches."
   (if (and (buffer-local-value 'ivy--minibuffer
@@ -817,31 +822,39 @@ This requests a normal (\"unforced\") idle update of POIs."
                  ivy--old-cands)))))
     ""))
 
-;; (defun poimap-current-symbol-update (window)
-;;   "Return SVG for all occurrences of the symbol at point.
+(defvar-local poimap-current-symbol-hide nil
+  "Temporarily hide poimap-current-symbol-update")
 
-;; Return nil if there is no symbol under point."
-;;   (when (and (< (point-max) 4194304)
-;;              ;; FIXME FIXMEFIXMEFIXMEFIXMEFIXMEFIXMEFIXMEFIXMEFIXMEFIXMEFIXMEFIXMEFIXMEFIXMEFIXMEFIXMEFIXME
-;;              ;; Check if selected window is buffer!
-;; 	     (eq (selected-window) window)
-;; 	     (not (bound-and-true-p isearch-mode)))
-;;     (when-let ((bounds (bounds-of-thing-at-point 'symbol)))
-;;       (let ((symbol (buffer-substring-no-properties
-;; 		     (car bounds)
-;; 		     (cdr bounds)))
-;; 	    (case-fold-search nil)
-;; 	    svg)
-;; 	(save-excursion
-;; 	  (save-restriction
-;; 	    (widen)
-;; 	    (goto-char (point-min))
-;; 	    (while (re-search-forward
-;; 		    (concat "\\_<" (regexp-quote symbol) "\\_>")
-;; 		    nil t)
-;;               (when-let (pos (poimap-map-position (match-beginning 0)))
-;;                 (push (poimap-circle pos 0.65 3 "#bbbbbb") svg)))))
-;; 	(mapconcat #'identity (mapcan #'identity (nreverse svg)))))))
+(defvar-local poimap--current-symbol-last nil
+  "Last current symbol")
+
+(defun poimap-current-symbol-update (_force)
+  "Return SVG for all occurrences of the symbol at point.
+Return nil if there is no symbol under point."
+  (if (or poimap-current-symbol-hide
+          (> (point-max) 4194304))  ;; buffer size > 4MiB
+      ""
+    (if-let ((bounds (bounds-of-thing-at-point 'symbol)))
+        (let ((symbol (buffer-substring-no-properties
+		       (car bounds)
+		       (cdr bounds)))
+	      (case-fold-search nil)
+	      svg)
+	  (if (eq symbol poimap--current-symbol-last)
+              nil  ;; We already did the search abort
+            (save-excursion
+	      (save-restriction
+	        (widen)
+	        (goto-char (point-min))
+	        (while (re-search-forward
+		        (concat "\\_<" (regexp-quote symbol) "\\_>")
+		        nil t)
+                  (when-let (pos (poimap-map-position (match-beginning 0)))
+                    (push (poimap-circle pos 0.65 3 "#bbbbbb") svg)))))
+            ;; FIXME: Too early.. this should be set after the pois are set!
+            (setq poimap--current-symbol-last symbol)
+	    (mapconcat #'identity (mapcan #'identity (nreverse svg)))))
+      "")))
 
 (defun poimap-bm-update (force)
   "Return SVG for bm bookmarks."

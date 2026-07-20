@@ -731,23 +731,38 @@ This requests a normal (\"unforced\") idle update of POIs."
                      (imenu--make-index-alist t)))))
       (unless (> (length index) 1000) ;; FIXME
         (cl-labels
-            ((walk (items)
+            ((walk (category items)
                (dolist (item items)
-                 (when (and (consp item)
-                            (not (equal (get-text-property 0 'imenu-kind
-                                                           (car item))
-                                        "Field"))
-                            (not (equal (car item) "*Rescan*")))
-                   (when-let (pos (or (car (get-text-property 0 'imenu-region
-                                                              (car item)))
-                                      (cdr item)))
-                     (when (or (markerp pos) (numberp pos))
-                       (when-let (map-pos (poimap-map-position pos))
-                         (push (poimap-tick map-pos 0.0 (cons 2 8) poimap--poi-imenu)
-                               svg)))))
-                 (when (imenu--subalist-p item)
-                   (walk (cdr item))))))
-          (walk index)
+                 (let* ((name (car item))
+                        (category (and name
+                                       (or (get-text-property 0 'imenu-kind name)
+                                           category))))
+                   (when (and (consp item)
+                              (not (equal category "Field"))
+                              (not (equal name "*Rescan*")))
+                     (when-let (pos (or (car (get-text-property 0 'imenu-region
+                                                                name))
+                                        (cdr item)))
+                       (when (or (markerp pos) (numberp pos))
+                         (when-let (map-pos (poimap-map-position pos))
+                           ;; FIXME: Extend this:
+                           (let ((color (pcase category
+                                          ((or "Type" "Types" "Struct" "Class")
+                                           (face-foreground 'font-lock-type-face))
+                                          ((or "Function" "Functions" "Fn")
+                                           (face-foreground 'font-lock-function-name-face))
+                                          ((or "Variable" "Variables" "Var")
+                                           (face-foreground 'font-lock-variable-name-face))
+                                          ((or "Const" "Constant" "Module")
+                                           (face-foreground 'font-lock-constant-face))
+                                          ("String"
+                                           (face-foreground 'font-lock-string-face))
+                                          (_ poimap--poi-imenu))))
+                             (push (poimap-tick map-pos 0.0 (cons 2 8) color)
+                                   svg))))))
+                   (when (imenu--subalist-p item)
+                     (walk name (cdr item)))))))
+          (walk nil index)
           (mapconcat #'identity (mapcan #'identity (nreverse svg))))))))
 
 (defvar poimap--imenu-refresh-ticks (make-hash-table :test #'eq)

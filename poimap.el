@@ -119,11 +119,6 @@ foreground is used for the in-window area."
   :type 'string
   :group 'poimap)
 
-(defcustom poimap--poi-imenu "#a8a8a8"
-  "Default color of points of interest."
-  :type 'string
-  :group 'poimap)
-
 (defcustom poimap--poi-diff-hl-insert "#9eca72"
   "Default color of points of interest."
   :type 'string
@@ -307,16 +302,24 @@ Static string and number values are directly inserted."
 (poimap--svg-template
  poimap--svg-circle-t circle
  (:cx str :cy str :r str :fill str :stroke str :stroke-width str
-      :shape-rendering "geometricPrecision"))
+      :shape-rendering "auto"))
 
 (poimap--svg-template
  poimap--svg-circle circle
- (:cx str :cy str :r str :fill str
-      :shape-rendering "geometricPrecision"))
+ (:cx str :cy str :r str :fill str :shape-rendering "auto"))
 
 (poimap--svg-template
  poimap--svg-line line
  (:x1 str :y1 str :x2 str :y2 str :stroke str :stroke-width str))
+
+(defun poimap-emacs-to-svg-color (color)
+  "Convert Emacs COLOR to SVG-compatible #rrggbb."
+  (let ((rgb (color-values color)))
+    (unless rgb "grey")
+    (format "#%02x%02x%02x"
+            (lsh (nth 0 rgb) -8)
+            (lsh (nth 1 rgb) -8)
+            (lsh (nth 2 rgb) -8))))
 
 (defun poimap-svg-ytranslate (vert height)
   "Get the vertical translate based on HEIGHT"
@@ -697,22 +700,27 @@ This requests a normal (\"unforced\") idle update of POIs."
 (defun poimap-diff-hl-update (force)
   "Return SVG for diff-hl markers."
   (when force
-    (let (svg)
+    (let ((svg)
+          (color-insert (poimap-emacs-to-svg-color
+                         (face-foreground 'font-lock-string-face)))  ;; FIXME: diff-hl-insert
+          (color-change (poimap-emacs-to-svg-color
+                         (face-foreground 'font-lock-keyword-face)))  ;; FIXME: diff-hl-change
+          (color-delete (poimap-emacs-to-svg-color
+                         (face-foreground 'error))))  ;; FIXME: diff-hl-delete
       (dolist (ov (overlays-in (point-min) (point-max)))
         (when-let (type (overlay-get ov 'diff-hl-hunk-type))
           (cond
            ((eq type 'insert)
             (when-let (pos (poimap-map-position
                             (cons (overlay-start ov) (overlay-end ov))))
-              (push (poimap-range pos 1.0 6 poimap--poi-diff-hl-insert) svg)))
+              (push (poimap-range pos 1.0 6 color-insert) svg)))
            ((eq type 'change)
             (when-let (pos (poimap-map-position
                             (cons (overlay-start ov) (overlay-end ov))))
-              (push (poimap-range pos 1.0 6 poimap--poi-diff-hl-change) svg)))
+              (push (poimap-range pos 1.0 6 color-change) svg)))
            ((eq type 'delete)
             (when-let (pos (poimap-map-position (overlay-start ov)))
-              (push (poimap-tick pos 1.0 (cons 4 6) poimap--poi-diff-hl-delete)
-                    svg))))))
+              (push (poimap-tick pos 1.0 (cons 4 6) color-delete) svg))))))
       (mapconcat #'identity (mapcan #'identity (nreverse svg))))))
 
 (defun poimap-diff-hl-update-advice (&rest args)
@@ -726,6 +734,18 @@ This requests a normal (\"unforced\") idle update of POIs."
   "Return SVG for Imenu items."
   (when force
     (let ((svg)
+          (type-color     (poimap-emacs-to-svg-color
+                           (face-foreground 'font-lock-type-face)))
+          (function-color (poimap-emacs-to-svg-color
+                           (face-foreground 'font-lock-function-name-face)))
+          (variable-color (poimap-emacs-to-svg-color
+                           (face-foreground 'font-lock-variable-name-face)))
+          (constant-color (poimap-emacs-to-svg-color
+                           (face-foreground 'font-lock-constant-face)))
+          (string-color   (poimap-emacs-to-svg-color
+                           (face-foreground 'font-lock-string-face)))
+          (default-color  (poimap-emacs-to-svg-color
+                           (face-foreground 'font-lock-keyword-face)))
           (index (ignore-errors
                    (let ((imenu-auto-rescan (if rescan t nil)))
                      (imenu--make-index-alist t)))))
@@ -740,25 +760,25 @@ This requests a normal (\"unforced\") idle update of POIs."
                    (when (and (consp item)
                               (not (equal category "Field"))
                               (not (equal name "*Rescan*")))
-                     (when-let (pos (or (car (get-text-property 0 'imenu-region
-                                                                name))
+                     (when-let (pos (or (car (get-text-property 0 'imenu-region name))
                                         (cdr item)))
                        (when (or (markerp pos) (numberp pos))
                          (when-let (map-pos (poimap-map-position pos))
                            ;; FIXME: Extend this:
                            (let ((color (pcase category
                                           ((or "Type" "Types" "Struct" "Class")
-                                           (face-foreground 'font-lock-type-face))
+                                           type-color)
                                           ((or "Function" "Functions" "Fn")
-                                           (face-foreground 'font-lock-function-name-face))
+                                           function-color)
                                           ((or "Variable" "Variables" "Var")
-                                           (face-foreground 'font-lock-variable-name-face))
-                                          ((or "Const" "Constant" "Module")
-                                           (face-foreground 'font-lock-constant-face))
+                                           variable-color)
+                                          ((or "Const" "Constant" "Module" "Enum")
+                                           constant-color)
                                           ("String"
-                                           (face-foreground 'font-lock-string-face))
-                                          (_ poimap--poi-imenu))))
-                             (push (poimap-tick map-pos 0.0 (cons 2 8) color)
+                                           string-color)
+                                          (_
+                                           default-color))))
+                             (push (poimap-tick map-pos 0.0 (cons 2 7) color)
                                    svg))))))
                    (when (imenu--subalist-p item)
                      (walk name (cdr item)))))))
@@ -769,22 +789,31 @@ This requests a normal (\"unforced\") idle update of POIs."
   "Last observed modification tick for each visible buffer.")
 
 (defvar poimap--imenu-refresh-idle-timer nil)
+(defvar poimap--imenu-rescan nil)
 
 (defun poimap--imenu-refresh ()
   "Process visible buffers whose text changed since the previous check."
   (while-no-input
-    (let ((visible-buffers
-           (delete-dups
-            (mapcar #'window-buffer
-                    (window-list-1 nil 'no-minibuffer t)))))
-      (dolist (buffer visible-buffers)
+    (let ((affected-buffers
+           (if (eq poimap--imenu-rescan 'global)
+               ;; All non-hidden buffers
+               (seq-filter
+                (lambda (buf)
+                  (not (string-prefix-p " " (buffer-name buf))))
+                (buffer-list))
+             ;; Only visible buffers
+             (delete-dups
+              (mapcar #'window-buffer
+                      (window-list-1 nil 'no-minibuffer t))))))
+      (dolist (buffer affected-buffers)
         (when (buffer-live-p buffer)
           (with-current-buffer buffer
             (let* ((current-tick (buffer-chars-modified-tick))
                    (previous-tick
                     (gethash buffer poimap--imenu-refresh-ticks current-tick)))
               (puthash buffer current-tick poimap--imenu-refresh-ticks)
-              (unless (= current-tick previous-tick)
+              (when (or poimap--imenu-rescan
+                        (/= current-tick previous-tick))
                 (when-let (pois (poimap-imenu-update t t))
                   (setf (alist-get 'poimap-imenu-update poimap--pois) pois)
                   (force-mode-line-update))))))))))
@@ -793,6 +822,17 @@ This requests a normal (\"unforced\") idle update of POIs."
       (run-with-idle-timer 1.0 t #'poimap--imenu-refresh))
 ;; FIXME
 ;; (cancel-timer poimap--imenu-refresh-idle-timer)
+
+(defun poimap--imenu-create-index-function-watcher (symbol new-value operation where)
+  (if (bufferp where)
+      (setq poimap--imenu-rescan t)
+    (setq poimap--imenu-rescan 'global)))
+
+(add-variable-watcher 'imenu-create-index-function
+                      #'poimap--imenu-create-index-function-watcher)
+
+;; (remove-variable-watcher 'imenu-create-index-function
+;;                          #'poimap--imenu-create-index-function-watcher)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -804,7 +844,7 @@ This requests a normal (\"unforced\") idle update of POIs."
                                      poimap-swiper-update
                                      poimap-diff-hl-update
                                      poimap-isearch-update
-                                     ;; poimap-current-symbol-update
+                                     poimap-current-symbol-update
                                      poimap-imenu-update))
 
 (require 'swiper)
@@ -843,33 +883,63 @@ This requests a normal (\"unforced\") idle update of POIs."
 (defvar-local poimap--current-symbol-last nil
   "Last current symbol")
 
-(defun poimap-current-symbol-update (_force)
+(defun poimap-current-symbol-update (force)
   "Return SVG for all occurrences of the symbol at point.
 Return nil if there is no symbol under point."
-  (if (or poimap-current-symbol-hide
-          (> (point-max) 4194304))  ;; buffer size > 4MiB
-      ""
-    (if-let ((bounds (bounds-of-thing-at-point 'symbol)))
-        (let ((symbol (buffer-substring-no-properties
-		       (car bounds)
-		       (cdr bounds)))
-	      (case-fold-search nil)
-	      svg)
-	  (if (eq symbol poimap--current-symbol-last)
-              nil  ;; We already did the search abort
-            (save-excursion
-	      (save-restriction
-	        (widen)
-	        (goto-char (point-min))
-	        (while (re-search-forward
-		        (concat "\\_<" (regexp-quote symbol) "\\_>")
-		        nil t)
-                  (when-let (pos (poimap-map-position (match-beginning 0)))
-                    (push (poimap-circle pos 0.65 3 "#bbbbbb") svg)))))
-            ;; FIXME: Too early.. this should be set after the pois are set!
-            (setq poimap--current-symbol-last symbol)
-	    (mapconcat #'identity (mapcan #'identity (nreverse svg)))))
-      "")))
+  (when force
+    (if (or poimap-current-symbol-hide
+            (> (point-max) 4194304))  ;; buffer size > 4MiB
+        ""
+      (if-let ((bounds (bounds-of-thing-at-point 'symbol)))
+          (let ((symbol (buffer-substring-no-properties
+		         (car bounds)
+		         (cdr bounds)))
+	        (case-fold-search nil)
+                (count 0)
+	        (svg))
+	    (if (eq symbol poimap--current-symbol-last)
+                nil  ;; We already did the search
+	      (cl-block nil
+                (save-excursion
+	          (save-restriction
+	            (widen)
+	            (goto-char (point-min))
+                    (while (re-search-forward
+		            (concat "\\_<" (regexp-quote symbol) "\\_>")
+		            nil t)
+                      (when-let (pos (poimap-map-position (match-beginning 0)))
+                        (cl-incf count)
+                        (when (> count 300)
+                          (setq poimap--current-symbol-last symbol)
+                          (cl-return ""))
+                        (push (poimap-circle pos 0.65 2.5 "#a0a0a0") svg)))))
+                ;; FIXME: Too early.. this should be set after the pois are set!
+                (setq poimap--current-symbol-last symbol)
+                (if (<= count 1)
+                    ""
+	          (mapconcat #'identity (mapcan #'identity (nreverse svg)))))))
+        ""))))
+
+(defvar-local poimap--current-symbol-idle-timer nil)
+
+(defun poimap--current-symbol-idle-refresh (&rest args)
+  "Schedule a buffer-local idle timer, unless one is already pending."
+  (unless poimap--current-symbol-idle-timer
+    (let ((buffer (current-buffer)))
+      (setq poimap--current-symbol-idle-timer
+            (run-with-idle-timer
+             0.3 nil
+             (lambda (buffer)
+               (when (buffer-live-p buffer)
+                 (with-current-buffer buffer
+                   (setq poimap--current-symbol-idle-timer nil)
+                   (when-let (pois (poimap-current-symbol-update t))
+                     (setf (alist-get 'poimap-current-symbol-update poimap--pois)
+                           pois)
+                     (force-mode-line-update)))))
+             buffer)))))
+
+(add-hook 'post-command-hook #'poimap--current-symbol-idle-refresh)
 
 (defun poimap-bm-update (force)
   "Return SVG for bm bookmarks."
@@ -877,7 +947,7 @@ Return nil if there is no symbol under point."
     (let (svg)
       (dolist (ov (bm-overlay-in-buffer))
         (when-let (pos (poimap-map-position (overlay-start ov)))
-          (push (poimap-circle pos 0.4 4 "#e4a3ff") svg)))
+          (push (poimap-circle pos 0.4 4.5 "#e4a3ff") svg)))
       (mapconcat #'identity (mapcan #'identity (nreverse svg))))))
 
 (defun poimap-bm-update-advice (&rest args)

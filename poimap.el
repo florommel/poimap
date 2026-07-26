@@ -844,6 +844,8 @@ This requests a normal (\"unforced\") idle update of POIs."
                                      poimap-swiper-update
                                      poimap-diff-hl-update
                                      poimap-isearch-update
+                                     poimap-register-update
+                                     poimap-bookmark-update
                                      poimap-current-symbol-update
                                      poimap-imenu-update))
 
@@ -957,6 +959,70 @@ Return nil if there is no symbol under point."
 
 (advice-add #'bm-bookmark-add :after #'poimap-bm-update-advice)
 (advice-add #'bm-bookmark-remove :after #'poimap-bm-update-advice)
+
+(defun poimap-bookmark-update (force)
+  "Return SVG for bookmarks"
+  (when force
+    (let* ((color (poimap-emacs-to-svg-color
+                   (face-foreground 'font-lock-keyword-face)))
+           (file (buffer-file-name))
+           (bms (when file
+                  (seq-filter
+                   (lambda (bookmark)
+                     (let ((bookmark-file
+                            (bookmark-get-filename bookmark)))
+                       (and bookmark-file
+                            (file-equal-p file bookmark-file))))
+                   bookmark-alist)))
+           (bps (mapcar #'bookmark-get-position bms))
+           (svg))
+      (dolist (bp bps)
+        (when-let (pos (poimap-map-position bp))
+          (push (poimap-circle pos 0.4 4.5 color) svg)))
+      (mapconcat #'identity (mapcan #'identity (nreverse svg))))))
+
+(defun poimap-bookmark--bookmark-count-watcher (symbol newval operation where)
+  "Watch changes to `bookmark-alist-modification-count`."
+  (let ((buffers (delete-dups
+                  (mapcar #'window-buffer
+                          (window-list-1 nil 'no-minibuffer t)))))
+    (dolist (buffer buffers)
+      (with-current-buffer buffer
+          (when-let (pois (poimap-bookmark-update t))
+            (setf (alist-get 'poimap-bookmark-update poimap--pois) pois)
+            (force-mode-line-update))))))
+
+(add-variable-watcher 'bookmark-alist-modification-count
+                      #'poimap-bookmark--bookmark-count-watcher)
+
+(defun poimap-register-update (force)
+  "Return SVG for registers"
+  (when force
+    (let ((color (poimap-emacs-to-svg-color
+                  (face-foreground 'font-lock-variable-name-face)))
+          (buffer (current-buffer))
+          (svg))
+      (mapc
+       (lambda (entry)
+         (let ((val (cdr entry)))
+           (when-let (pos (and (markerp val)
+                               (eq (marker-buffer val) buffer)
+                               (poimap-map-position val)))
+             (push (poimap-circle pos 0.4 4.5 color) svg))))
+       register-alist)
+      (mapconcat #'identity (mapcan #'identity (nreverse svg))))))
+
+(defun poimap-register--advice (&rest args)
+  (let ((buffers (delete-dups
+                  (mapcar #'window-buffer
+                          (window-list-1 nil 'no-minibuffer t)))))
+    (dolist (buffer buffers)
+      (with-current-buffer buffer
+        (when-let (pois (poimap-register-update t))
+          (setf (alist-get 'poimap-register-update poimap--pois) pois)
+          (force-mode-line-update))))))
+
+(advice-add #'set-register :after #'poimap-register--advice)
 
 ;; (require 'vertico)
 ;; (require 'consult)

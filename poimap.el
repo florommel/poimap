@@ -1,11 +1,12 @@
 ;;; poimap --- SVG projection of visible buffer region -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2026 Free Software Foundation, Inc.
+;; Copyright (C) 2026 Florian Rommel
 
 ;; Author: Florian Rommel <mail@florommel.de>
 ;; Maintainer: Florian Rommel <mail@florommel.de>
 ;; Url: https://github.com/florommel/poimap
 ;; Created: 2026-06-25
+;; Version: 0.1
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: convenience, svg, navigation
 
@@ -32,7 +33,6 @@
 
 (require 'cl-lib)
 (require 'subr-x)
-(require 'imenu)
 
 (defgroup poimap nil
   "SVG projection of the current buffer's visible range."
@@ -119,21 +119,6 @@ foreground is used for the in-window area."
   :type 'string
   :group 'poimap)
 
-(defcustom poimap--poi-diff-hl-insert "#9eca72"
-  "Default color of points of interest."
-  :type 'string
-  :group 'poimap)
-
-(defcustom poimap--poi-diff-hl-change "#5381a8"
-  "Default color of points of interest."
-  :type 'string
-  :group 'poimap)
-
-(defcustom poimap--poi-diff-hl-delete "#ee7777"
-  "Default color of points of interest."
-  :type 'string
-  :group 'poimap)
-
 (defcustom poimap-interest-size 0.1
   "Default point-of-interest dot size, in pixels."
   :type 'number
@@ -144,8 +129,7 @@ foreground is used for the in-window area."
   :type 'number
   :group 'poimap)
 
-(defcustom poimap-idle-update-functions
-  '(poimap-isearch-update poimap-imenu-update poimap-diff-hl-update)
+(defcustom poimap-idle-update-functions nil
   "Functions that return point-of-interest SVG for the current buffer.
 
 Each function is called in the current buffer and should return an SVG string,
@@ -694,365 +678,6 @@ This requests a normal (\"unforced\") idle update of POIs."
                    (t
                     (push ev unread-command-events)
                     (setq done t))))))))))))
-
-(defun poimap-isearch-update (_force)
-  "Return SVG for active isearch matches in the current buffer."
-  (if (and (bound-and-true-p isearch-mode)
-           (boundp 'isearch-string)
-           (stringp isearch-string)
-           (not (string-empty-p isearch-string)))
-      (save-excursion
-        (save-restriction
-          (widen)
-          (let ((case-fold-search (if (boundp 'isearch-case-fold-search)
-                                      isearch-case-fold-search
-                                    case-fold-search))
-                (regexp (if (and (boundp 'isearch-regexp) isearch-regexp)
-                            isearch-string
-                          (regexp-quote isearch-string)))
-                svg)
-            (goto-char (point-min))
-            (while (and (not (eobp))
-                        (re-search-forward regexp nil t))
-              (when-let (pos (poimap-map-position (match-beginning 0)))
-                (push (poimap-circle pos 0.65 3 poimap--poi-default-color) svg))
-              ;; Protect against zero-length regex matches.
-              (when (= (match-beginning 0) (match-end 0))
-                (forward-char 1)))
-            (mapconcat #'identity (mapcan #'identity (nreverse svg))))))
-    ""))
-
-(defun poimap-diff-hl-update (force)
-  "Return SVG for diff-hl markers."
-  (when force
-    (let ((svg)
-          (color-insert (poimap-emacs-to-svg-color
-                         (face-foreground 'font-lock-string-face)))  ;; FIXME: diff-hl-insert
-          (color-change (poimap-emacs-to-svg-color
-                         (face-foreground 'font-lock-keyword-face)))  ;; FIXME: diff-hl-change
-          (color-delete (poimap-emacs-to-svg-color
-                         (face-foreground 'error))))  ;; FIXME: diff-hl-delete
-      (dolist (ov (overlays-in (point-min) (point-max)))
-        (when-let (type (overlay-get ov 'diff-hl-hunk-type))
-          (cond
-           ((eq type 'insert)
-            (when-let (pos (poimap-map-position
-                            (cons (overlay-start ov) (overlay-end ov))))
-              (push (poimap-range pos 1.0 6 color-insert) svg)))
-           ((eq type 'change)
-            (when-let (pos (poimap-map-position
-                            (cons (overlay-start ov) (overlay-end ov))))
-              (push (poimap-range pos 1.0 6 color-change) svg)))
-           ((eq type 'delete)
-            (when-let (pos (poimap-map-position (overlay-start ov)))
-              (push (poimap-tick pos 1.0 (cons 4 6) color-delete) svg))))))
-      (mapconcat #'identity (mapcan #'identity (nreverse svg))))))
-
-(defun poimap-diff-hl-update-advice (&rest args)
-  (when-let (pois (poimap-diff-hl-update t))
-    (setf (alist-get 'poimap-diff-hl-update poimap--pois) pois)
-    (force-mode-line-update)))
-
-(advice-add #'diff-hl-update :after #'poimap-diff-hl-update-advice)
-
-(defun poimap-imenu-update (force &optional rescan)
-  "Return SVG for Imenu items."
-  (when force
-    (let ((svg)
-          (type-color     (poimap-emacs-to-svg-color
-                           (face-foreground 'font-lock-type-face)))
-          (function-color (poimap-emacs-to-svg-color
-                           (face-foreground 'font-lock-function-name-face)))
-          (variable-color (poimap-emacs-to-svg-color
-                           (face-foreground 'font-lock-variable-name-face)))
-          (constant-color (poimap-emacs-to-svg-color
-                           (face-foreground 'font-lock-constant-face)))
-          (string-color   (poimap-emacs-to-svg-color
-                           (face-foreground 'font-lock-string-face)))
-          (default-color  (poimap-emacs-to-svg-color
-                           (face-foreground 'font-lock-keyword-face)))
-          (index (ignore-errors
-                   (let ((imenu-auto-rescan (if rescan t nil)))
-                     (imenu--make-index-alist t)))))
-      (unless (> (length index) 1000) ;; FIXME
-        (cl-labels
-            ((walk (category items)
-               (dolist (item items)
-                 (let* ((name (car item))
-                        (category (and name
-                                       (or (get-text-property 0 'imenu-kind name)
-                                           category))))
-                   (when (and (consp item)
-                              (not (equal category "Field"))
-                              (not (equal name "*Rescan*")))
-                     (when-let (pos (or (car (get-text-property 0 'imenu-region name))
-                                        (cdr item)))
-                       (when (or (markerp pos) (numberp pos))
-                         (when-let (map-pos (poimap-map-position pos))
-                           ;; FIXME: Extend this:
-                           (let ((color (pcase category
-                                          ((or "Type" "Types" "Struct" "Class")
-                                           type-color)
-                                          ((or "Function" "Functions" "Fn")
-                                           function-color)
-                                          ((or "Variable" "Variables" "Var")
-                                           variable-color)
-                                          ((or "Const" "Constant" "Module" "Enum")
-                                           constant-color)
-                                          ("String"
-                                           string-color)
-                                          (_
-                                           default-color))))
-                             (push (poimap-tick map-pos 0.0 (cons 2 7) color)
-                                   svg))))))
-                   (when (imenu--subalist-p item)
-                     (walk name (cdr item)))))))
-          (walk nil index)
-          (mapconcat #'identity (mapcan #'identity (nreverse svg))))))))
-
-(defvar poimap--imenu-refresh-ticks (make-hash-table :test #'eq)
-  "Last observed modification tick for each visible buffer.")
-
-(defvar poimap--imenu-refresh-idle-timer nil)
-(defvar poimap--imenu-rescan nil)
-
-(defun poimap--imenu-refresh ()
-  "Process visible buffers whose text changed since the previous check."
-  (while-no-input
-    (let ((affected-buffers
-           (if (eq poimap--imenu-rescan 'global)
-               ;; All non-hidden buffers
-               (seq-filter
-                (lambda (buf)
-                  (not (string-prefix-p " " (buffer-name buf))))
-                (buffer-list))
-             ;; Only visible buffers
-             (delete-dups
-              (mapcar #'window-buffer
-                      (window-list-1 nil 'no-minibuffer t))))))
-      (dolist (buffer affected-buffers)
-        (when (buffer-live-p buffer)
-          (with-current-buffer buffer
-            (let* ((current-tick (buffer-chars-modified-tick))
-                   (previous-tick
-                    (gethash buffer poimap--imenu-refresh-ticks current-tick)))
-              (puthash buffer current-tick poimap--imenu-refresh-ticks)
-              (when (or poimap--imenu-rescan
-                        (/= current-tick previous-tick))
-                (when-let (pois (poimap-imenu-update t t))
-                  (setf (alist-get 'poimap-imenu-update poimap--pois) pois)
-                  (force-mode-line-update))))))))))
-
-(setq poimap--imenu-refresh-idle-timer
-      (run-with-idle-timer 1.0 t #'poimap--imenu-refresh))
-;; FIXME
-;; (cancel-timer poimap--imenu-refresh-idle-timer)
-
-(defun poimap--imenu-create-index-function-watcher (symbol new-value operation where)
-  (if (bufferp where)
-      (setq poimap--imenu-rescan t)
-    (setq poimap--imenu-rescan 'global)))
-
-(add-variable-watcher 'imenu-create-index-function
-                      #'poimap--imenu-create-index-function-watcher)
-
-;; (remove-variable-watcher 'imenu-create-index-function
-;;                          #'poimap--imenu-create-index-function-watcher)
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(set-face-attribute 'poimap-face nil :box nil)
-(set-face-attribute 'poimap-face-inactive nil :box nil)
-(setq poimap-height 1.35)
-(setq poimap-width 0.38)
-(setq poimap-idle-update-functions '(poimap-bm-update
-                                     poimap-swiper-update
-                                     poimap-diff-hl-update
-                                     poimap-isearch-update
-                                     poimap-register-update
-                                     poimap-bookmark-update
-                                     poimap-current-symbol-update
-                                     poimap-imenu-update))
-
-(require 'swiper)
-(require 'ivy)
-
-;; FIXME: Leaks into other buffer if changed with an active session
-(defun poimap-swiper-update (_force)
-  "Return SVG for current `swiper' matches."
-  (if (and (buffer-local-value 'ivy--minibuffer
-                               (window-buffer (active-minibuffer-window)))
-           (eq (ivy-state-caller ivy-last) 'swiper)
-           (< (length ivy--old-cands) 2000) ;;FIXME
-           (or
-            (eq (current-buffer) (window-buffer (minibuffer-selected-window)))
-            (eq (current-buffer) (window-buffer (selected-window)))))
-      (with-ivy-window
-        (mapconcat
-         #'identity
-         (mapcan
-          #'identity
-          (delq nil
-                (mapcar
-                 (lambda (cand)
-                   (let ((line (swiper--line-number cand)))
-                     (save-excursion
-                       (goto-char (point-min))
-                       (forward-line (1- line))
-                       (when-let (pos (poimap-map-position (line-beginning-position)))
-                         (poimap-circle pos 0.65 3 poimap--poi-default-color)))))
-                 ivy--old-cands)))))
-    ""))
-
-(defvar-local poimap-current-symbol-hide nil
-  "Temporarily hide poimap-current-symbol-update")
-
-(defvar-local poimap--current-symbol-last nil
-  "Last current symbol")
-
-(defun poimap-current-symbol-update (force)
-  "Return SVG for all occurrences of the symbol at point.
-Return nil if there is no symbol under point."
-  (when force
-    (if (or poimap-current-symbol-hide
-            (> (point-max) 4194304))  ;; buffer size > 4MiB
-        ""
-      (if-let ((bounds (bounds-of-thing-at-point 'symbol)))
-          (let ((symbol (buffer-substring-no-properties
-		         (car bounds)
-		         (cdr bounds)))
-	        (case-fold-search nil)
-                (count 0)
-	        (svg))
-	    (if (eq symbol poimap--current-symbol-last)
-                nil  ;; We already did the search
-	      (cl-block nil
-                (save-excursion
-	          (save-restriction
-	            (widen)
-	            (goto-char (point-min))
-                    (while (re-search-forward
-		            (concat "\\_<" (regexp-quote symbol) "\\_>")
-		            nil t)
-                      (when-let (pos (poimap-map-position (match-beginning 0)))
-                        (cl-incf count)
-                        (when (> count 300)
-                          (setq poimap--current-symbol-last symbol)
-                          (cl-return ""))
-                        (push (poimap-circle pos 0.65 2.5 "#a0a0a0") svg)))))
-                ;; FIXME: Too early.. this should be set after the pois are set!
-                (setq poimap--current-symbol-last symbol)
-                (if (<= count 1)
-                    ""
-	          (mapconcat #'identity (mapcan #'identity (nreverse svg)))))))
-        ""))))
-
-(defvar-local poimap--current-symbol-idle-timer nil)
-
-(defun poimap--current-symbol-idle-refresh (&rest args)
-  "Schedule a buffer-local idle timer, unless one is already pending."
-  (unless poimap--current-symbol-idle-timer
-    (let ((buffer (current-buffer)))
-      (setq poimap--current-symbol-idle-timer
-            (run-with-idle-timer
-             0.3 nil
-             (lambda (buffer)
-               (when (buffer-live-p buffer)
-                 (with-current-buffer buffer
-                   (setq poimap--current-symbol-idle-timer nil)
-                   (when-let (pois (poimap-current-symbol-update t))
-                     (setf (alist-get 'poimap-current-symbol-update poimap--pois)
-                           pois)
-                     (force-mode-line-update)))))
-             buffer)))))
-
-(add-hook 'post-command-hook #'poimap--current-symbol-idle-refresh)
-
-(defun poimap-bm-update (force)
-  "Return SVG for bm bookmarks."
-  (when force
-    (let (svg)
-      (dolist (ov (bm-overlay-in-buffer))
-        (when-let (pos (poimap-map-position (overlay-start ov)))
-          (push (poimap-diamond pos 0.37 12 12 "#e4a3ff") svg)))
-      (mapconcat #'identity (mapcan #'identity (nreverse svg))))))
-
-(defun poimap-bm-update-advice (&rest args)
-  (when-let (pois (poimap-bm-update t))
-    (setf (alist-get 'poimap-bm-update poimap--pois) pois)
-    (force-mode-line-update)))
-
-(advice-add #'bm-bookmark-add :after #'poimap-bm-update-advice)
-(advice-add #'bm-bookmark-remove :after #'poimap-bm-update-advice)
-
-(defun poimap-bookmark-update (force)
-  "Return SVG for bookmarks"
-  (when force
-    (let* ((color (poimap-emacs-to-svg-color
-                   (face-foreground 'font-lock-keyword-face)))
-           (file (buffer-file-name))
-           (bms (when file
-                  (seq-filter
-                   (lambda (bookmark)
-                     (let ((bookmark-file
-                            (bookmark-get-filename bookmark)))
-                       (and bookmark-file
-                            (file-equal-p file bookmark-file))))
-                   bookmark-alist)))
-           (bps (mapcar #'bookmark-get-position bms))
-           (svg))
-      (dolist (bp bps)
-        (when-let (pos (poimap-map-position bp))
-          (push (poimap-diamond pos 0.37 12 12 color) svg)))
-      (mapconcat #'identity (mapcan #'identity (nreverse svg))))))
-
-(defun poimap-bookmark--bookmark-count-watcher (symbol newval operation where)
-  "Watch changes to `bookmark-alist-modification-count`."
-  (let ((buffers (delete-dups
-                  (mapcar #'window-buffer
-                          (window-list-1 nil 'no-minibuffer t)))))
-    (dolist (buffer buffers)
-      (with-current-buffer buffer
-          (when-let (pois (poimap-bookmark-update t))
-            (setf (alist-get 'poimap-bookmark-update poimap--pois) pois)
-            (force-mode-line-update))))))
-
-(add-variable-watcher 'bookmark-alist-modification-count
-                      #'poimap-bookmark--bookmark-count-watcher)
-
-(defun poimap-register-update (force)
-  "Return SVG for registers"
-  (when force
-    (let ((color (poimap-emacs-to-svg-color
-                  (face-foreground 'font-lock-variable-name-face)))
-          (buffer (current-buffer))
-          (buffer-file (buffer-file-name))
-          (svg))
-      (mapc
-       (lambda (entry)
-         (let ((val (cdr entry)))
-           (when-let (pos (or (and (markerp val)
-                                   (eq (marker-buffer val) buffer)
-                                   (poimap-map-position val))
-                              (and (listp val)
-                                   (eq (car val) 'file-query)
-                                   (string= buffer-file (cadr val))
-                                   (poimap-map-position (caddr val)))))
-             (push (poimap-diamond pos 0.37 12 12 color) svg))))
-       register-alist)
-      (mapconcat #'identity (mapcan #'identity (nreverse svg))))))
-
-(defun poimap-register--advice (&rest args)
-  (let ((buffers (delete-dups
-                  (mapcar #'window-buffer
-                          (window-list-1 nil 'no-minibuffer t)))))
-    (dolist (buffer buffers)
-      (with-current-buffer buffer
-        (when-let (pois (poimap-register-update t))
-          (setf (alist-get 'poimap-register-update poimap--pois) pois)
-          (force-mode-line-update))))))
-
-(advice-add #'set-register :after #'poimap-register--advice)
 
 (provide 'poimap)
 

@@ -287,6 +287,17 @@ Static string and number values are directly inserted."
   "Closing inner SVG tag."
   '(list "</svg>"))
 
+(define-inline poimap--svg-defs ()
+  (inline-quote
+   (list
+    (concat
+     "<defs>"
+     "<symbol id=\"diamond\" viewBox=\"0 0 2 2\" "
+     "preserveAspectRatio=\"none\" overflow=\"visible\">"
+     "<path d=\"M0-1 1 0 0 1-1 0z\" shape-rendering=\"auto\"/>"
+     "</symbol>"
+     "</defs>"))))
+
 (poimap--svg-template
  poimap--svg-rect rect
  (:x str :y str :width str :height str :fill str))
@@ -311,6 +322,10 @@ Static string and number values are directly inserted."
 (poimap--svg-template
  poimap--svg-line line
  (:x1 str :y1 str :x2 str :y2 str :stroke str :stroke-width str))
+
+(poimap--svg-template
+ poimap--svg-diamond use
+ (:x str :y str :width str :height str :fill str :href "#diamond"))
 
 (defun poimap-emacs-to-svg-color (color)
   "Convert Emacs COLOR to SVG-compatible #rrggbb."
@@ -337,6 +352,15 @@ SIZE is height-relative."
                       (poimap--percent vert)
                       (number-to-string size)
                       color))
+
+(defun poimap-diamond (pos vert width height color)
+  "Return SVG for a filled circle at POS and VERT with SIZE and COLOR.
+SIZE is height-relative."
+  (poimap--svg-diamond (poimap--percent pos)
+                       (poimap--percent vert)
+                       (number-to-string width)
+                       (number-to-string height)
+                       color))
 
 (defun poimap-range (pos vert size color)
   (let* ((x1 (car pos))
@@ -527,6 +551,7 @@ This requests a normal (\"unforced\") idle update of POIs."
               (nconc
                (poimap--svg-root-open (number-to-string width)
                                       (number-to-string height))
+               (poimap--svg-defs)
                ;; Whole buffer rectangle.
                (poimap--svg-rect-s (number-to-string (ceiling (/ border-outer 2.0)))
                                    (number-to-string (ceiling (/ border-outer 2.0)))
@@ -949,7 +974,7 @@ Return nil if there is no symbol under point."
     (let (svg)
       (dolist (ov (bm-overlay-in-buffer))
         (when-let (pos (poimap-map-position (overlay-start ov)))
-          (push (poimap-circle pos 0.4 4.5 "#e4a3ff") svg)))
+          (push (poimap-diamond pos 0.37 12 12 "#e4a3ff") svg)))
       (mapconcat #'identity (mapcan #'identity (nreverse svg))))))
 
 (defun poimap-bm-update-advice (&rest args)
@@ -978,7 +1003,7 @@ Return nil if there is no symbol under point."
            (svg))
       (dolist (bp bps)
         (when-let (pos (poimap-map-position bp))
-          (push (poimap-circle pos 0.4 4.5 color) svg)))
+          (push (poimap-diamond pos 0.37 12 12 color) svg)))
       (mapconcat #'identity (mapcan #'identity (nreverse svg))))))
 
 (defun poimap-bookmark--bookmark-count-watcher (symbol newval operation where)
@@ -1001,14 +1026,19 @@ Return nil if there is no symbol under point."
     (let ((color (poimap-emacs-to-svg-color
                   (face-foreground 'font-lock-variable-name-face)))
           (buffer (current-buffer))
+          (buffer-file (buffer-file-name))
           (svg))
       (mapc
        (lambda (entry)
          (let ((val (cdr entry)))
-           (when-let (pos (and (markerp val)
-                               (eq (marker-buffer val) buffer)
-                               (poimap-map-position val)))
-             (push (poimap-circle pos 0.4 4.5 color) svg))))
+           (when-let (pos (or (and (markerp val)
+                                   (eq (marker-buffer val) buffer)
+                                   (poimap-map-position val))
+                              (and (listp val)
+                                   (eq (car val) 'file-query)
+                                   (string= buffer-file (cadr val))
+                                   (poimap-map-position (caddr val)))))
+             (push (poimap-diamond pos 0.37 12 12 color) svg))))
        register-alist)
       (mapconcat #'identity (mapcan #'identity (nreverse svg))))))
 
@@ -1023,27 +1053,6 @@ Return nil if there is no symbol under point."
           (force-mode-line-update))))))
 
 (advice-add #'set-register :after #'poimap-register--advice)
-
-;; (require 'vertico)
-;; (require 'consult)
-
-;; (defun my/vertico-candidates ()
-;;   "Return all current Vertico candidates, or nil if Vertico is not active.
-
-;; The returned candidates are the current filtered candidate list."
-;;   (when-let ((win (active-minibuffer-window)))
-;;     (with-current-buffer (window-buffer win)
-;;       (when (bound-and-true-p vertico--input)
-;;         ;; Make sure the list is current.
-;;         (when (fboundp 'vertico--update)
-;;           (vertico--update))
-;;         ;; `vertico--candidates' may contain suffixes; prepend `vertico--base'
-;;         ;; to get the full candidate displayed/selected by Vertico.
-;;         (mapcar (lambda (cand)
-;;                   (concat vertico--base cand))
-;;                 vertico--candidates)))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (provide 'poimap)
 

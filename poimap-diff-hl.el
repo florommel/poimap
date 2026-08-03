@@ -30,45 +30,69 @@
 (require 'diff-hl)
 (require 'poimap)
 
-(defcustom poimap--poi-diff-hl-insert "#9eca72"
-  "Default color of points of interest."
-  :type 'string
+(defface poimap-diff-hl-insert
+  '((t :inherit diff-hl-insert))
+  "Face for poimap diff-hl inserted lines.
+
+The foreground color is used."
   :group 'poimap)
 
-(defcustom poimap--poi-diff-hl-change "#5381a8"
-  "Default color of points of interest."
-  :type 'string
+(defface poimap-diff-hl-change
+  '((t :inherit diff-hl-change))
+  "Face for poimap diff-hl changed lines.
+
+The foreground color is used."
   :group 'poimap)
 
-(defcustom poimap--poi-diff-hl-delete "#ee7777"
-  "Default color of points of interest."
-  :type 'string
+(defface poimap-diff-hl-delete
+  '((t :inherit diff-hl-delete))
+  "Face for poimap diff-hl deleted lines.
+
+The foreground color is used."
+  :group 'poimap)
+
+(defcustom poimap-diff-hl-vertical-position 1.0
+  "Vertical position of deleted-line POIs."
+  :type 'number
+  :group 'poimap)
+
+(defcustom poimap-diff-hl-height 6
+  "Size passed to `poimap-diff-hl-delete-shape-function'."
+  :type '(choice number (cons number number))
+  :group 'poimap)
+
+(defcustom poimap-diff-hl-delete-width 4
+  "Size passed to `poimap-diff-hl-delete-shape-function'."
+  :type '(choice number (cons number number))
   :group 'poimap)
 
 (defun poimap-diff-hl--update (force)
   "Return SVG for diff-hl markers."
   (when force
-    (let ((svg)
-          (color-insert (poimap-emacs-to-svg-color
-                         (face-foreground 'font-lock-string-face)))  ;; FIXME: diff-hl-insert
+    (let ((color-insert (poimap-emacs-to-svg-color
+                         (face-foreground 'poimap-diff-hl-insert nil 'default)))
           (color-change (poimap-emacs-to-svg-color
-                         (face-foreground 'font-lock-keyword-face)))  ;; FIXME: diff-hl-change
+                         (face-foreground 'poimap-diff-hl-change nil 'default)))
           (color-delete (poimap-emacs-to-svg-color
-                         (face-foreground 'error))))  ;; FIXME: diff-hl-delete
+                         (face-foreground 'poimap-diff-hl-delete nil 'default)))
+          (vert poimap-diff-hl-vertical-position)
+          (height poimap-diff-hl-height)
+          (del-size (cons poimap-diff-hl-delete-width poimap-diff-hl-height))
+          (svg))
       (dolist (ov (overlays-in (point-min) (point-max)))
         (when-let (type (overlay-get ov 'diff-hl-hunk-type))
           (cond
            ((eq type 'insert)
             (when-let (pos (poimap-map-position
                             (cons (overlay-start ov) (overlay-end ov))))
-              (push (poimap-range pos 1.0 6 color-insert) svg)))
+              (push (poimap-range pos vert height color-insert) svg)))
            ((eq type 'change)
             (when-let (pos (poimap-map-position
                             (cons (overlay-start ov) (overlay-end ov))))
-              (push (poimap-range pos 1.0 6 color-change) svg)))
+              (push (poimap-range pos vert height color-change) svg)))
            ((eq type 'delete)
             (when-let (pos (poimap-map-position (overlay-start ov)))
-              (push (poimap-tick pos 1.0 (cons 4 6) color-delete) svg))))))
+              (push (poimap-tick pos vert del-size color-delete) svg))))))
       (mapconcat #'identity (mapcan #'identity (nreverse svg))))))
 
 (defun poimap-diff-hl--update-advice (&rest _args)

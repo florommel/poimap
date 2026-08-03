@@ -31,11 +31,36 @@
 (require 'poimap)
 (require 'seq)
 
+(defface poimap-bookmark-face
+  '((t :inherit font-lock-constant-face))
+  "Face for poimap bookmark POIs.
+
+The foreground color is used."
+  :group 'poimap)
+
+(defcustom poimap-bookmark-shape-function #'poimap-diamond
+  "Function used to draw bookmark POIs."
+  :type 'function
+  :group 'poimap)
+
+(defcustom poimap-bookmark-vertical-position 0.37
+  "Vertical position of bookmark POIs."
+  :type 'number
+  :group 'poimap)
+
+(defcustom poimap-bookmark-size (cons 12 12)
+  "Size passed to `poimap-bookmark-shape-function'."
+  :type '(choice number (cons number number))
+  :group 'poimap)
+
 (defun poimap-bookmark--update (force)
   "Return SVG for bookmarks."
   (when force
-    (let* ((color (poimap-emacs-to-svg-color
-                   (face-foreground 'font-lock-keyword-face)))
+    (let* ((shape-fn poimap-bookmark-shape-function)
+           (vert poimap-bookmark-vertical-position)
+           (size poimap-bookmark-size)
+           (color (poimap-emacs-to-svg-color
+                   (face-foreground 'poimap-bookmark-face nil 'default)))
            (file (buffer-file-name))
            (bms (when file
                   (seq-filter
@@ -49,7 +74,7 @@
            (svg))
       (dolist (bp bps)
         (when-let (pos (poimap-map-position bp))
-          (push (poimap-diamond pos 0.37 12 12 color) svg)))
+          (push (funcall shape-fn pos vert size color) svg)))
       (mapconcat #'identity (mapcan #'identity (nreverse svg))))))
 
 (defun poimap-bookmark--bookmark-count-watcher

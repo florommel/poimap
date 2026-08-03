@@ -1,4 +1,4 @@
-;;; poimap --- SVG projection of visible buffer region -*- lexical-binding: t; -*-
+;;; poimap --- Visual buffer map with points of interest -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2026 Florian Rommel
 
@@ -25,9 +25,10 @@
 
 ;;; Commentary:
 
-;; Shows a compact SVG overview of the current buffer.  The full bar is the
-;; whole buffer; the filled segment is the visible window; a line marks point;
-;; optional points or regions of interest can be drawn as dots or lines.
+;; Poimap provides a visual (SVG-based) buffer map for your mode line.
+;; It shows a compact overview of the buffer, highlighting the
+;; currently visible portion in the window, the point position, and
+;; configurable points or regions of interest (POIs).
 
 ;;; Code:
 
@@ -37,6 +38,22 @@
 (defgroup poimap nil
   "SVG projection of the current buffer's visible range."
   :group 'convenience)
+
+(defface poimap-face
+  '((t :inherit mode-line))
+  "Face for the active poimap bar.
+
+Its background is used for the out-of-window area, and its
+foreground is used for the visible-window area."
+  :group 'poimap)
+
+(defface poimap-face-inactive
+  '((t :inherit mode-line-inactive))
+  "Face for the inactive poimap bar.
+
+Its background is used for the out-of-window area, and its
+foreground is used for the visible-window area."
+  :group 'poimap)
 
 (defcustom poimap-width 0.3
   "The width of the poimap bar"
@@ -68,22 +85,6 @@
           (const :tag "Use the poimap faces" t))
   :group 'poimap)
 
-(defface poimap-face
-  '((t :inherit mode-line))
-  "Face for the active MLScroll bar.
-
-Its background is used for the out-of-window area, and its
-foreground is used for the in-window area."
-  :group 'poimap)
-
-(defface poimap-face-inactive
-  '((t :inherit mode-line-inactive))
-  "Face for the inactive MLScroll bar.
-
-Its background is used for the out-of-window area, and its
-foreground is used for the in-window area."
-  :group 'poimap)
-
 (defcustom poimap-background "#1b1b1b66"
   "Fill color for the whole-buffer rectangle."
   :type 'string
@@ -112,11 +113,6 @@ foreground is used for the in-window area."
 (defcustom poimap-point-width 2
   "Width of the point marker"
   :type 'number
-  :group 'poimap)
-
-(defcustom poimap--poi-default-color "#ffcc66"
-  "Default color of points of interest."
-  :type 'string
   :group 'poimap)
 
 (defcustom poimap-interest-size 0.1
@@ -311,14 +307,19 @@ Static string and number values are directly inserted."
  poimap--svg-diamond use
  (:x str :y str :width str :height str :fill str :href "#diamond"))
 
-(defun poimap-emacs-to-svg-color (color)
+(defun poimap-emacs-to-svg-color (color &optional alpha)
   "Convert Emacs COLOR to SVG-compatible #rrggbb."
   (let ((rgb (color-values color)))
-    (unless rgb "grey")
-    (format "#%02x%02x%02x"
-            (lsh (nth 0 rgb) -8)
-            (lsh (nth 1 rgb) -8)
-            (lsh (nth 2 rgb) -8))))
+    (if alpha
+        (format "#%02x%02x%02x%02x"
+                (lsh (nth 0 rgb) -8)
+                (lsh (nth 1 rgb) -8)
+                (lsh (nth 2 rgb) -8)
+                (* alpha 255))
+      (format "#%02x%02x%02x"
+              (lsh (nth 0 rgb) -8)
+              (lsh (nth 1 rgb) -8)
+              (lsh (nth 2 rgb) -8)))))
 
 (defun poimap-svg-ytranslate (vert height)
   "Get the vertical translate based on HEIGHT"
@@ -337,14 +338,17 @@ SIZE is height-relative."
                       (number-to-string size)
                       color))
 
-(defun poimap-diamond (pos vert width height color)
-  "Return SVG for a filled circle at POS and VERT with SIZE and COLOR.
-SIZE is height-relative."
-  (poimap--svg-diamond (poimap--percent pos)
-                       (poimap--percent vert)
-                       (number-to-string width)
-                       (number-to-string height)
-                       color))
+(defun poimap-diamond (pos vert size color)
+  "Return SVG for a filled diamond at POS and VERT with SIZE and COLOR.
+SIZE is a cons cell of the form (WIDTH . HEIGHT), with both dimensions
+height-relative."
+  (let* ((width  (car size))
+         (height (cdr size)))
+    (poimap--svg-diamond (poimap--percent pos)
+                         (poimap--percent vert)
+                         (number-to-string width)
+                         (number-to-string height)
+                         color)))
 
 (defun poimap-range (pos vert size color)
   (let* ((x1 (car pos))

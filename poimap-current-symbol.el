@@ -31,6 +31,28 @@
 (require 'poimap)
 (require 'thingatpt)
 
+(defface poimap-current-symbol-face
+  '((t :inherit font-lock-keyword-face))
+  "Face for poimap current symbol POIs.
+
+The foreground color is used."
+  :group 'poimap)
+
+(defcustom poimap-current-symbol-shape-function #'poimap-circle
+  "Function used to draw current-symbol POIs."
+  :type 'function
+  :group 'poimap)
+
+(defcustom poimap-current-symbol-vertical-position 0.65
+  "Vertical position of current-symbol POIs."
+  :type '(choice number (cons number number))
+  :group 'poimap)
+
+(defcustom poimap-current-symbol-size 2.5
+  "Size passed to `poimap-current-symbol-shape-function'."
+  :type 'number
+  :group 'poimap)
+
 (defvar-local poimap-current-symbol-hide nil
   "Temporarily hide `poimap-current-symbol--update'.")
 
@@ -50,6 +72,12 @@ Return nil if there is no symbol under point."
                          (cdr bounds)))
                 (case-fold-search nil)
                 (count 0)
+                (shape-fn poimap-current-symbol-shape-function)
+                (vert poimap-current-symbol-vertical-position)
+                (size poimap-current-symbol-size)
+                (color (poimap-emacs-to-svg-color
+                        (face-foreground 'poimap-current-symbol-face
+                                         nil 'default)))
                 (svg))
             (if (eq symbol poimap-current-symbol--last)
                 nil  ;; We already did the search
@@ -66,7 +94,7 @@ Return nil if there is no symbol under point."
                         (when (> count 300)
                           (setq poimap-current-symbol--last symbol)
                           (cl-return ""))
-                        (push (poimap-circle pos 0.65 2.5 "#a0a0a0") svg)))))
+                        (push (funcall shape-fn pos vert size color) svg)))))
                 ;; FIXME: Too early.. this should be set after the pois are set!
                 (setq poimap-current-symbol--last symbol)
                 (if (<= count 1)

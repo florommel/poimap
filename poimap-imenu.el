@@ -33,22 +33,94 @@
 (require 'seq)
 (require 'subr-x)
 
+(defface poimap-imenu-type-face
+  '((t :inherit font-lock-type-face))
+  "Face for poimap imenu type/struct/class POIs.
+
+The foreground color is used."
+  :group 'poimap)
+
+(defface poimap-imenu-function-face
+  '((t :inherit font-lock-function-name-face))
+  "Face for poimap imenu function POIs.
+
+The foreground color is used."
+  :group 'poimap)
+
+(defface poimap-imenu-variable-face
+  '((t :inherit font-lock-variable-name-face))
+  "Face for poimap imenu variable POIs.
+
+The foreground color is used."
+  :group 'poimap)
+
+(defface poimap-imenu-constant-face
+  '((t :inherit font-lock-constant-face))
+  "Face for poimap imenu constant POIs.
+
+The foreground color is used."
+  :group 'poimap)
+
+(defface poimap-imenu-string-face
+  '((t :inherit font-lock-string-face))
+  "Face for poimap imenu string POIs.
+
+The foreground color is used."
+  :group 'poimap)
+
+(defface poimap-imenu-default-face
+  '((t :inherit font-lock-keyword-face))
+  "Face for poimap imenu default POIs.
+
+The foreground color is used."
+  :group 'poimap)
+
+(defcustom poimap-imenu-shape-function #'poimap-tick
+  "Function used to draw Imenu POIs."
+  :type 'function
+  :group 'poimap)
+
+(defcustom poimap-imenu-vertical-position 0.0
+  "Vertical position of Imenu POIs."
+  :type 'number
+  :group 'poimap)
+
+(defcustom poimap-imenu-size (cons 2 7)
+  "Size passed to `poimap-imenu-shape-function'."
+  :type '(choice number (cons number number))
+  :group 'poimap)
+
+(defcustom poimap-imenu-rescan-idle-interval 1.0
+  "Idle interval at which the imenu for visible buffers that have changed
+is recalculated."
+  :type 'number
+  :group 'poimap)
+
 (defun poimap-imenu--update (force &optional rescan)
   "Return SVG for Imenu items."
   (when force
     (let ((svg)
+          (shape-fn poimap-imenu-shape-function)
+          (vert poimap-imenu-vertical-position)
+          (size poimap-imenu-size)
           (type-color     (poimap-emacs-to-svg-color
-                           (face-foreground 'font-lock-type-face)))
+                           (face-foreground 'poimap-imenu-type-face
+                                            nil 'default)))
           (function-color (poimap-emacs-to-svg-color
-                           (face-foreground 'font-lock-function-name-face)))
+                           (face-foreground 'poimap-imenu-function-face
+                                            nil 'default)))
           (variable-color (poimap-emacs-to-svg-color
-                           (face-foreground 'font-lock-variable-name-face)))
+                           (face-foreground 'poimap-imenu-variable-face
+                                            nil 'default)))
           (constant-color (poimap-emacs-to-svg-color
-                           (face-foreground 'font-lock-constant-face)))
+                           (face-foreground 'poimap-imenu-constant-face
+                                            nil 'default)))
           (string-color   (poimap-emacs-to-svg-color
-                           (face-foreground 'font-lock-string-face)))
+                           (face-foreground 'poimap-imenu-string-face
+                                            nil 'default)))
           (default-color  (poimap-emacs-to-svg-color
-                           (face-foreground 'font-lock-keyword-face)))
+                           (face-foreground 'poimap-imenu-default-face
+                                            nil 'default)))
           (index (ignore-errors
                    (let ((imenu-auto-rescan (if rescan t nil)))
                      (imenu--make-index-alist t)))))
@@ -82,7 +154,7 @@
                                            string-color)
                                           (_
                                            default-color))))
-                             (push (poimap-tick map-pos 0.0 (cons 2 7) color)
+                             (push (funcall shape-fn map-pos vert size color)
                                    svg))))))
                    (when (imenu--subalist-p item)
                      (walk name (cdr item)))))))
@@ -140,7 +212,8 @@
          'imenu-create-index-function
          #'poimap-imenu--create-index-function-watcher)
         (setq poimap-imenu--refresh-idle-timer
-              (run-with-idle-timer 1.0 t #'poimap-imenu--refresh)))
+              (run-with-idle-timer poimap-imenu-rescan-idle-interval
+                                   t #'poimap-imenu--refresh)))
     (remove-hook 'poimap-idle-update-functions #'poimap-imenu--update)
     (remove-variable-watcher
      'imenu-create-index-function

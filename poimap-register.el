@@ -30,11 +30,36 @@
 (require 'poimap)
 (require 'register)
 
+(defface poimap-register-face
+  '((t :inherit font-lock-variable-name-face))
+  "Face for poimap register POIs.
+
+The foreground color is used."
+  :group 'poimap)
+
+(defcustom poimap-register-shape-function #'poimap-diamond
+  "Function used to draw register POIs."
+  :type 'function
+  :group 'poimap)
+
+(defcustom poimap-register-vertical-position 0.37
+  "Vertical position of register POIs."
+  :type 'number
+  :group 'poimap)
+
+(defcustom poimap-register-size (cons 12 12)
+  "Size passed to `poimap-register-shape-function'."
+  :type '(choice number (cons number number))
+  :group 'poimap)
+
 (defun poimap-register--update (force)
   "Return SVG for registers."
   (when force
-    (let ((color (poimap-emacs-to-svg-color
-                  (face-foreground 'font-lock-variable-name-face)))
+    (let ((shape-fn poimap-register-shape-function)
+          (vert poimap-register-vertical-position)
+          (size poimap-register-size)
+          (color (poimap-emacs-to-svg-color
+                  (face-foreground 'poimap-register-face nil 'default)))
           (buffer (current-buffer))
           (buffer-file (buffer-file-name))
           (svg))
@@ -48,7 +73,7 @@
                                    (eq (car val) 'file-query)
                                    (string= buffer-file (cadr val))
                                    (poimap-map-position (caddr val)))))
-             (push (poimap-diamond pos 0.37 12 12 color) svg))))
+             (push (funcall shape-fn pos vert size color) svg))))
        register-alist)
       (mapconcat #'identity (mapcan #'identity (nreverse svg))))))
 

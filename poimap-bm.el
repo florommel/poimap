@@ -30,13 +30,40 @@
 (require 'bm)
 (require 'poimap)
 
+(defface poimap-bm-face
+  '((t :inherit bm-fringe-face))
+  "Face for poimap bm POIs.
+
+The foreground color is used."
+  :group 'poimap)
+
+(defcustom poimap-bm-shape-function #'poimap-diamond
+  "Function used to draw bm POIs."
+  :type 'function
+  :group 'poimap)
+
+(defcustom poimap-bm-vertical-position 0.37
+  "Vertical position of bm POIs."
+  :type 'number
+  :group 'poimap)
+
+(defcustom poimap-bm-size (cons 12 12)
+  "Size passed to `poimap-bm-shape-function'."
+  :type '(choice number (cons number number))
+  :group 'poimap)
+
 (defun poimap-bm--update (force)
   "Return SVG for bm bookmarks."
   (when force
-    (let (svg)
+    (let ((shape-fn poimap-bm-shape-function)
+          (vert poimap-bm-vertical-position)
+          (size poimap-bm-size)
+          (color (poimap-emacs-to-svg-color
+                  (face-foreground 'poimap-bm-face nil 'default)))
+          (svg))
       (dolist (ov (bm-overlay-in-buffer))
         (when-let (pos (poimap-map-position (overlay-start ov)))
-          (push (poimap-diamond pos 0.37 12 12 "#e4a3ff") svg)))
+          (push (funcall shape-fn pos vert size color) svg)))
       (mapconcat #'identity (mapcan #'identity (nreverse svg))))))
 
 (defun poimap-bm--update-advice (&rest _args)

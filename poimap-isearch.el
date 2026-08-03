@@ -31,6 +31,28 @@
 (require 'poimap)
 (require 'subr-x)
 
+(defface poimap-isearch-face
+  '((t :inherit font-lock-variable-name-face))
+  "Face for poimap Isearch POIs.
+
+The foreground color is used."
+  :group 'poimap)
+
+(defcustom poimap-isearch-shape-function #'poimap-circle
+  "Function used to draw Isearch POIs."
+  :type 'function
+  :group 'poimap)
+
+(defcustom poimap-isearch-vertical-position 0.65
+  "Vertical position of Isearch POIs."
+  :type '(choice number (cons number number))
+  :group 'poimap)
+
+(defcustom poimap-isearch-size 3
+  "Size passed to `poimap-isearch-shape-function'."
+  :type 'number
+  :group 'poimap)
+
 (defun poimap-isearch--update (_force)
   "Return SVG for active isearch matches in the current buffer."
   (if (and (bound-and-true-p isearch-mode)
@@ -46,12 +68,17 @@
                 (regexp (if (and (boundp 'isearch-regexp) isearch-regexp)
                             isearch-string
                           (regexp-quote isearch-string)))
-                svg)
+                (shape-fn poimap-isearch-shape-function)
+                (vert poimap-isearch-vertical-position)
+                (size poimap-isearch-size)
+                (color (poimap-emacs-to-svg-color
+                        (face-foreground 'poimap-isearch-face nil 'default)))
+                (svg))
             (goto-char (point-min))
             (while (and (not (eobp))
                         (re-search-forward regexp nil t))
               (when-let (pos (poimap-map-position (match-beginning 0)))
-                (push (poimap-circle pos 0.65 3 poimap--poi-default-color) svg))
+                (push (funcall shape-fn pos vert size color) svg))
               ;; Protect against zero-length regex matches.
               (when (= (match-beginning 0) (match-end 0))
                 (forward-char 1)))

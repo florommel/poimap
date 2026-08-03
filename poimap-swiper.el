@@ -31,6 +31,28 @@
 (require 'poimap)
 (require 'swiper)
 
+(defface poimap-swiper-face
+  '((t :inherit font-lock-variable-name-face))
+  "Face for poimap swiper POIs.
+
+The foreground color is used."
+  :group 'poimap)
+
+(defcustom poimap-swiper-shape-function #'poimap-circle
+  "Function used to draw Swiper POIs."
+  :type 'function
+  :group 'poimap)
+
+(defcustom poimap-swiper-vertical-position 0.65
+  "Vertical position of Swiper POIs."
+  :type '(choice number (cons number number))
+  :group 'poimap)
+
+(defcustom poimap-swiper-size 3
+  "Size passed to `poimap-swiper-shape-function'."
+  :type 'number
+  :group 'poimap)
+
 ;; FIXME: Leaks into other buffer if changed with an active session
 (defun poimap-swiper--update (_force)
   "Return SVG for current `swiper' matches."
@@ -42,20 +64,26 @@
             (eq (current-buffer) (window-buffer (minibuffer-selected-window)))
             (eq (current-buffer) (window-buffer (selected-window)))))
       (with-ivy-window
-        (mapconcat
-         #'identity
-         (mapcan
-          #'identity
-          (delq nil
-                (mapcar
-                 (lambda (cand)
-                   (let ((line (swiper--line-number cand)))
-                     (save-excursion
-                       (goto-char (point-min))
-                       (forward-line (1- line))
-                       (when-let (pos (poimap-map-position (line-beginning-position)))
-                         (poimap-circle pos 0.65 3 poimap--poi-default-color)))))
-                 ivy--old-cands)))))
+        (let ((shape-fn poimap-swiper-shape-function)
+              (vert poimap-swiper-vertical-position)
+              (size poimap-swiper-size)
+              (color (poimap-emacs-to-svg-color
+                      (face-foreground 'poimap-swiper-face nil 'default))))
+          (mapconcat
+           #'identity
+           (mapcan
+            #'identity
+            (delq nil
+                  (mapcar
+                   (lambda (cand)
+                     (let ((line (swiper--line-number cand)))
+                       (save-excursion
+                         (goto-char (point-min))
+                         (forward-line (1- line))
+                         (when-let (pos (poimap-map-position
+                                         (line-beginning-position)))
+                           (funcall shape-fn pos vert size color)))))
+                   ivy--old-cands))))))
     ""))
 
 ;;;###autoload

@@ -39,20 +39,78 @@
   "SVG projection of the current buffer's visible range."
   :group 'convenience)
 
-(defface poimap-face
-  '((t :inherit mode-line))
-  "Face for the active poimap bar.
-
-Its background is used for the out-of-window area, and its
-foreground is used for the visible-window area."
+(defface poimap-face '((t :inherit mode-line))
+  "Face for the active poimap bar."
   :group 'poimap)
 
-(defface poimap-face-inactive
-  '((t :inherit mode-line-inactive))
-  "Face for the inactive poimap bar.
+(defface poimap-inactive-face '((t :inherit mode-line-inactive))
+  "Face for the inactive poimap bar."
+  :group 'poimap)
 
-Its background is used for the out-of-window area, and its
-foreground is used for the visible-window area."
+(defface poimap-background-face '((t :inherit default))
+  "Face for the poimap background.
+
+Its background is used for the whole-buffer background.
+Transparency can be controlled by `poimap-background-alpha'."
+  :group 'poimap)
+
+(defcustom poimap-background-alpha 0.5
+  "Alpha value applied onto `poimap-background-face'."
+  :type 'number
+  :group 'poimap)
+
+(defface poimap-background-inactive-face '((t :inherit default))
+  "Face for the poimap background for inactive windows.
+
+Its background is used for the whole-buffer background.
+Transparency can be controlled by `poimap-background-alpha'."
+  :group 'poimap)
+
+(defcustom poimap-background-inactive-alpha 0.4
+  "Alpha value applied onto `poimap-background-inactive-face'."
+  :type 'number
+  :group 'poimap)
+
+(defface poimap-border-face '((t :inherit default))
+  "Face for the poimap background.
+
+Its background is used for the border color.
+Transparency can be controlled by `poimap-border-alpha'."
+  :group 'poimap)
+
+(defcustom poimap-border-alpha 0.9
+  "Alpha value applied onto `poimap-border-face'."
+  :type 'number
+  :group 'poimap)
+
+(defface poimap-visible-window-face '((t :inherit mode-line))
+  "Face for the poimap background.
+
+Its background is used for the visible-window color.
+Transparency can be controlled by `poimap-visible-window-alpha'."
+  :group 'poimap)
+
+(defcustom poimap-visible-window-alpha 1.0
+  "Alpha value applied onto `poimap-visible-window-face'."
+  :type 'number
+  :group 'poimap)
+
+(defface poimap-visible-window-inactive-face '((t :inherit mode-line-inactive))
+  "Face for the poimap background.
+
+Its background is used for the visible-window color.
+Transparency can be controlled by `poimap-visible-window-alpha'."
+  :group 'poimap)
+
+(defcustom poimap-visible-window-inactive-alpha 1.0
+  "Alpha value applied onto `poimap-visible-window-inactive-face'."
+  :type 'number
+  :group 'poimap)
+
+(defface poimap-point-face '((t :inherit mode-line-buffer-id))
+  "Face for the poimap point.
+
+Its foreground is used for the point marker."
   :group 'poimap)
 
 (defcustom poimap-width 0.3
@@ -79,35 +137,15 @@ foreground is used for the visible-window area."
   :group 'poimap)
 
 (defcustom poimap-use-face t
-  "Use `poimap-face' and `poimap-face-inactive' as poimap's base face"
+  "Use `poimap-face' and `poimap-inactive-face' as poimap's base face"
   :type '(choice
           (const :tag "Don't use a face" nil)
           (const :tag "Use the poimap faces" t))
   :group 'poimap)
 
-(defcustom poimap-background "#1b1b1b66"
-  "Fill color for the whole-buffer rectangle."
-  :type 'string
-  :group 'poimap)
-
-(defcustom poimap-border "#0b0b0ba0"
-  "Stroke color for the whole-buffer rectangle."
-  :type 'string
-  :group 'poimap)
-
 (defcustom poimap-border-width 1
   "Border width of the poimap rectangle"
   :type 'number
-  :group 'poimap)
-
-(defcustom poimap-visible "#ffffff28"
-  "Fill color for the visible-window rectangle."
-  :type 'string
-  :group 'poimap)
-
-(defcustom poimap-point "#ffffffd0"
-  "Color of the point marker."
-  :type 'string
   :group 'poimap)
 
 (defcustom poimap-point-width 2
@@ -274,7 +312,14 @@ Static string and number values are directly inserted."
      "<defs>"
      "<symbol id=\"diamond\" viewBox=\"0 0 2 2\" "
      "preserveAspectRatio=\"none\" overflow=\"visible\">"
-     "<path d=\"M0-1 1 0 0 1-1 0z\" shape-rendering=\"auto\"/>"
+     "<path d=\"M0-1 1 0 0 1-1 0z\" shape-rendering=\"auto\" "
+     "fill=\"currentColor\"/>"
+     "</symbol>"
+     "<symbol id=\"xcross\" viewBox=\"0 0 2 2\" "
+     "preserveAspectRatio=\"none\" overflow=\"visible\">"
+     "<path d=\"M-1-1 1 1 M-1 1 1-1\" fill=\"none\" "
+     "stroke=\"currentColor\" stroke-width=\"0.7\" stroke-linecap=\"round\" "
+     "shape-rendering=\"auto\"/>"
      "</symbol>"
      "</defs>"))))
 
@@ -305,7 +350,11 @@ Static string and number values are directly inserted."
 
 (poimap--svg-template
  poimap--svg-diamond use
- (:x str :y str :width str :height str :fill str :href "#diamond"))
+ (:x str :y str :width str :height str :color str :href "#diamond"))
+
+(poimap--svg-template
+ poimap--svg-xcross use
+ (:x str :y str :width str :height str :color str :href "#xcross"))
 
 (defun poimap-emacs-to-svg-color (color &optional alpha)
   "Convert Emacs COLOR to SVG-compatible #rrggbb."
@@ -349,6 +398,18 @@ height-relative."
                          (number-to-string width)
                          (number-to-string height)
                          color)))
+
+(defun poimap-xcross (pos vert size color)
+  "Return SVG for an x cross at POS and VERT with SIZE and COLOR.
+SIZE is a cons cell of the form (WIDTH . HEIGHT), with both dimensions
+height-relative."
+  (let* ((width  (car size))
+         (height (cdr size)))
+    (poimap--svg-xcross (poimap--percent pos)
+                        (poimap--percent vert)
+                        (number-to-string width)
+                        (number-to-string height)
+                        color)))
 
 (defun poimap-range (pos vert size color)
   (let* ((x1 (car pos))
@@ -505,7 +566,7 @@ This requests a normal (\"unforced\") idle update of POIs."
 (add-hook 'window-selection-change-functions
           #'poimap--request-idle-update-for-window-selection-change)
 
-(defun poimap--svg (window width height)
+(defun poimap--svg (window width height active)
   "Return an SVG object showing WINDOW's visible range in the current buffer."
   ;; To keep scrolling responsive, we only update every 0.02 seconds max if
   ;; input is already pending.
@@ -530,7 +591,24 @@ This requests a normal (\"unforced\") idle update of POIs."
            (visible-start (poimap--clamp (window-start window) min-pos max-pos))
            (visible-end (poimap--clamp (window-end window) min-pos max-pos))
            (point-pos (poimap--clamp (point) min-pos max-pos))
-           (visible-width (- visible-end visible-start)))
+           (visible-width (- visible-end visible-start))
+           (bg-color (poimap-emacs-to-svg-color
+                      (face-background (if active 'poimap-background-face
+                                         'poimap-background-inactive-face)
+                                       nil 'default)
+                      (if active poimap-background-alpha
+                        poimap-background-inactive-alpha)))
+           (wn-color (poimap-emacs-to-svg-color
+                      (face-background (if active 'poimap-visible-window-face
+                                         'poimap-visible-window-inactive-face)
+                                       nil 'default)
+                      (if active poimap-visible-window-alpha
+                        poimap-visible-window-inactive-alpha)))
+           (pt-color (poimap-emacs-to-svg-color
+                      (face-foreground 'poimap-point-face nil 'default)))
+           (bo-color (poimap-emacs-to-svg-color
+                      (face-background 'poimap-border-face nil 'default)
+                      poimap-border-alpha)))
       ;; Now we make the new svg with the current scroll position and the most
       ;; recently cached `poimap--pois'.
       (set-window-parameter
@@ -545,8 +623,7 @@ This requests a normal (\"unforced\") idle update of POIs."
                                    (number-to-string (ceiling (/ border-outer 2.0)))
                                    (number-to-string (+ content-width border-outer))
                                    (number-to-string (+ content-height border-outer))
-                                   poimap-background
-                                   poimap-border
+                                   bg-color bo-color
                                    (number-to-string border-outer))
                (poimap--svg-inner-open (number-to-string border-outer)
                                        (number-to-string border-outer)
@@ -559,7 +636,7 @@ This requests a normal (\"unforced\") idle update of POIs."
                                  "0"
                                  (poimap--percent (- vend vstart))
                                  (number-to-string content-height)
-                                 poimap-visible))
+                                 wn-color))
                ;; Points of interest.
                (mapcar #'cdr poimap--pois)
                ;; Point marker.
@@ -567,7 +644,7 @@ This requests a normal (\"unforced\") idle update of POIs."
                                                      (- point-pos min-pos))
                                                   (- max-pos min-pos))))))
                  (poimap--svg-line x "0" x (number-to-string content-height)
-                                   poimap-point
+                                   pt-color
                                    (number-to-string poimap-point-width)))
                (poimap--svg-inner-close)
                (poimap--svg-root-close)))))))
@@ -575,7 +652,8 @@ This requests a normal (\"unforced\") idle update of POIs."
 (defun poimap-string (&optional window width height)
   "Return a display string containing the projection image for WINDOW."
   (if-let (window (poimap--live-window window))
-      (let* ((bar-width (or width
+      (let* ((active (mode-line-window-selected-p))
+             (bar-width (or width
                             (pcase poimap-width
                               ((and w (pred integerp)) w)
                               ((and w (pred floatp))
@@ -587,23 +665,24 @@ This requests a normal (\"unforced\") idle update of POIs."
                              (pcase poimap-height
                                ((and h (pred integerp)) h)
                                ((and h (pred floatp))
-                                (round (* h (window-font-height window 'poimap-face))))
+                                (round (* h (window-font-height
+                                             window 'poimap-face))))
                                ((and h (pred functionp))
                                 (funcall h))
                                (_ (error "Invalid value for `poimap-height'")))))
              (bar (propertize " "
                               'display (list 'image
                                              :type 'svg :data
-                                             (poimap--svg window bar-width bar-height)
+                                             (poimap--svg window bar-width
+                                                          bar-height active)
                                              :ascent 'center :scale 1)
                               'help-echo "mouse-1: Go to position / drag to scroll"
                               'local-map '(keymap
                                            (mode-line
                                             keymap (down-mouse-1 . poimap-mouse)))
                               'face (when poimap-use-face
-                                      (if (mode-line-window-selected-p)
-                                          'poimap-face
-                                        'poimap-face-inactive)))))
+                                      (if active 'poimap-face
+                                        'poimap-inactive-face)))))
         (set-window-parameter window 'poimap-width bar-width)
         (if poimap-align-right
             (list

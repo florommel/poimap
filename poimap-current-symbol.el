@@ -32,7 +32,7 @@
 (require 'thingatpt)
 
 (defface poimap-current-symbol-face
-  '((t :inherit font-lock-keyword-face))
+  '((t :inherit font-lock-constant-face))
   "Face for poimap current symbol POIs.
 
 The foreground color is used."

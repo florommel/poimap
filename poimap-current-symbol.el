@@ -53,8 +53,7 @@ The foreground color is used."
   :type 'number
   :group 'poimap)
 
-(defvar-local poimap-current-symbol-hide nil
-  "Temporarily hide `poimap-current-symbol--update'.")
+(defvar-local poimap-current-symbol--inhibitors nil)
 
 (defvar-local poimap-current-symbol--last nil
   "Last current symbol.")
@@ -63,7 +62,7 @@ The foreground color is used."
   "Return SVG for all occurrences of the symbol at point.
 Return nil if there is no symbol under point."
   (when force
-    (if (or poimap-current-symbol-hide
+    (if (or poimap-current-symbol--inhibitors
             (> (point-max) 4194304))  ;; buffer size > 4MiB
         ""
       (if-let ((bounds (bounds-of-thing-at-point 'symbol)))
@@ -120,6 +119,20 @@ Return nil if there is no symbol under point."
                            pois)
                      (force-mode-line-update)))))
              buffer)))))
+
+(defun poimap-current-symbol-inhibit (tag)
+  "Temporarily disable the poimap current-symbol indicators for inhibitor TAG."
+  (when (not (memq tag poimap-current-symbol--inhibitors))
+    (push tag poimap-current-symbol--inhibitors)
+    (setf (alist-get 'poimap-current-symbol--update poimap--pois) "")))
+
+(defun poimap-current-symbol-reactivate (tag)
+  "Reactivate the poimap current-symbol indicators for inhibitor TAG.
+Current symbols will only be displayed again once all inhibited TAGs have been
+reactivated."
+  (when (memq tag poimap-current-symbol--inhibitors)
+    (setq poimap-current-symbol--inhibitors
+          (delq tag poimap-current-symbol--inhibitors))))
 
 ;;;###autoload
 (define-minor-mode poimap-current-symbol

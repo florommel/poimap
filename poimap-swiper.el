@@ -64,6 +64,8 @@ The foreground color is used."
             (eq (current-buffer) (window-buffer (minibuffer-selected-window)))
             (eq (current-buffer) (window-buffer (selected-window)))))
       (with-ivy-window
+        (when (fboundp 'poimap-current-symbol-inhibit)
+          (poimap-current-symbol-inhibit 'swiper))
         (let ((shape-fn poimap-swiper-shape-function)
               (vert poimap-swiper-vertical-position)
               (size poimap-swiper-size)
@@ -84,6 +86,8 @@ The foreground color is used."
                                          (line-beginning-position)))
                            (funcall shape-fn pos vert size color)))))
                    ivy--old-cands))))))
+    (when (fboundp 'poimap-current-symbol-reactivate)
+      (poimap-current-symbol-reactivate 'swiper))
     ""))
 
 ;;;###autoload

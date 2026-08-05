@@ -61,6 +61,8 @@ The foreground color is used."
            (not (string-empty-p isearch-string)))
       (save-excursion
         (save-restriction
+          (when (fboundp 'poimap-current-symbol-inhibit)
+            (poimap-current-symbol-inhibit 'isearch))
           (widen)
           (let ((case-fold-search (if (boundp 'isearch-case-fold-search)
                                       isearch-case-fold-search
@@ -83,6 +85,8 @@ The foreground color is used."
               (when (= (match-beginning 0) (match-end 0))
                 (forward-char 1)))
             (mapconcat #'identity (mapcan #'identity (nreverse svg))))))
+    (when (fboundp 'poimap-current-symbol-reactivate)
+      (poimap-current-symbol-reactivate 'isearch))
     ""))
 
 ;;;###autoload

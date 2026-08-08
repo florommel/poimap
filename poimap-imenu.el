@@ -80,7 +80,7 @@ The foreground color is used."
   :type 'function
   :group 'poimap)
 
-(defcustom poimap-imenu-vertical-position 0.0
+(defcustom poimap-imenu-vertical-position 'top
   "Vertical position of Imenu POIs."
   :type 'number
   :group 'poimap)

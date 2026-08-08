@@ -373,8 +373,8 @@ Static string and number values are directly inserted."
   "Get the vertical translate based on HEIGHT"
   (concat "translate(0 "
           (cond
-           ((= vert 0) "0")
-           ((= vert 1) (number-to-string (* -1 height)))
+           ((eq vert 'top) "0")
+           ((eq vert 'bottom) (number-to-string (* -1 height)))
            (t (number-to-string (/ height -2.0))))
           ")"))
 
@@ -384,14 +384,18 @@ Static string and number values are directly inserted."
           (number-to-string (/ width -2.0))
           " "
           (cond
-           ((= vert 0) "0")
-           ((= vert 1) (number-to-string (* -1 height)))
+           ((eq vert 'top) "0")
+           ((eq vert 'bottom) (number-to-string (* -1 height)))
            (t (number-to-string (/ height -2.0))))
           ")"))
 
 (defun poimap-ellipse (pos vert size color)
   "Return SVG for a ellipse at POS and VERT with SIZE and COLOR.
-SIZE is the absolute size -- either a number or a cons cell (WIDTH . HEIGHT)"
+
+POS is the relative horizontal position returned by `poimap-map-position'.
+SIZE is the absolute size, specified as either a number or a cons cell
+(WIDTH . HEIGHT).  VERT specifies the vertical position: a number between
+0 and 1.  COLOR specifies the color."
   (let* ((width  (if (consp size) (car size) size))
          (height (if (consp size) (cdr size) size)))
     (poimap--svg-ellipse (poimap--percent pos)
@@ -402,7 +406,11 @@ SIZE is the absolute size -- either a number or a cons cell (WIDTH . HEIGHT)"
 
 (defun poimap-diamond (pos vert size color)
   "Return SVG for a diamond at POS and VERT with SIZE and COLOR.
-SIZE is the absolute size -- either a number or a cons cell (WIDTH . HEIGHT)"
+
+POS is the relative horizontal position returned by `poimap-map-position'.
+SIZE is the absolute size, specified as either a number or a cons cell
+(WIDTH . HEIGHT).  VERT specifies the vertical position: a number between
+0 and 1.  COLOR specifies the color."
   (let* ((width  (if (consp size) (car size) size))
          (height (if (consp size) (cdr size) size)))
     (poimap--svg-diamond (poimap--percent pos)
@@ -413,7 +421,11 @@ SIZE is the absolute size -- either a number or a cons cell (WIDTH . HEIGHT)"
 
 (defun poimap-xcross (pos vert size color)
   "Return SVG for a x cross at POS and VERT with SIZE and COLOR.
-SIZE is the absolute size -- either a number or a cons cell (WIDTH . HEIGHT)"
+
+POS is the relative horizontal position returned by `poimap-map-position'.
+SIZE is the absolute size, specified as either a number or a cons cell
+(WIDTH . HEIGHT).  VERT specifies the vertical position: a number between
+0 and 1.  COLOR specifies the color."
   (let* ((width  (if (consp size) (car size) size))
          (height (if (consp size) (cdr size) size)))
     (poimap--svg-xcross (poimap--percent pos)
@@ -423,25 +435,40 @@ SIZE is the absolute size -- either a number or a cons cell (WIDTH . HEIGHT)"
                         color)))
 
 (defun poimap-tick (pos vert size color)
-  "Return SVG for a tick mark (rect) at POS and VERT with SIZE and COLOR.
-SIZE is the absolute size -- either a number or a cons cell (WIDTH . HEIGHT)"
+  "Return SVG for a rectangular tick mark at POS and VERT, with SIZE and COLOR.
+
+POS is the relative horizontal position returned by `poimap-map-position'.
+SIZE is the absolute size, specified as either a number or a cons cell
+(WIDTH . HEIGHT).  VERT specifies the vertical position: a number between
+0 and 1, or the symbol \\='top or \\='bottom to align the tick with the
+corresponding edge without overlap.  COLOR specifies the color."
   (let* ((width  (if (consp size) (car size) size))
-         (height (if (consp size) (cdr size) size)))
+         (height (if (consp size) (cdr size) size))
+         (vert-n (cond ((numberp vert) vert)
+                       ((eq vert 'top) 0)
+                       (t 1))))
     (poimap--svg-rect-t (poimap--percent pos)
-                        (poimap--percent vert)
+                        (poimap--percent vert-n)
                         (number-to-string width)
                         (number-to-string height)
                         color
                         (poimap-svg-xytranslate width height vert))))
 
 (defun poimap-range (pos vert size color)
-  "Return SVG for a range at POS and VERT with SIZE and COLOR.
-This is different from the other shape functions:
-POS is a cons cell of the form (FROM . TO) and size is always a number."
+  "Return SVG for a range at POS and VERT, with SIZE and COLOR.
+
+POS is the horizontal positions and range as a cons cell (FROM . TO).
+SIZE is the absolute size, specified as either a number.  VERT specifies the
+vertical position: a number between 0 and 1, or the symbol \\='top or \\='bottom
+to align the range with the corresponding edge without overlap. COLOR specifies
+the color."
   (let* ((x1 (car pos))
-         (x2 (cdr pos)))
+         (x2 (cdr pos))
+         (vert-n (cond ((numberp vert) vert)
+                       ((eq vert 'top) 0)
+                       (t 1))))
     (poimap--svg-rect-t (poimap--percent x1)
-                        (poimap--percent vert)
+                        (poimap--percent vert-n)
                         (poimap--percent (- x2 x1))
                         (number-to-string size)
                         color

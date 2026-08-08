@@ -51,7 +51,7 @@ The foreground color is used."
 The foreground color is used."
   :group 'poimap)
 
-(defcustom poimap-diff-hl-vertical-position 1.0
+(defcustom poimap-diff-hl-vertical-position 'bottom
   "Vertical position of deleted-line POIs."
   :type 'number
   :group 'poimap)

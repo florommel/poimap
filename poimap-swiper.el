@@ -38,7 +38,7 @@
 The foreground color is used."
   :group 'poimap)
 
-(defcustom poimap-swiper-shape-function #'poimap-circle
+(defcustom poimap-swiper-shape-function #'poimap-ellipse
   "Function used to draw Swiper POIs."
   :type 'function
   :group 'poimap)
@@ -48,7 +48,7 @@ The foreground color is used."
   :type '(choice number (cons number number))
   :group 'poimap)
 
-(defcustom poimap-swiper-size 3
+(defcustom poimap-swiper-size 6
   "Size passed to `poimap-swiper-shape-function'."
   :type 'number
   :group 'poimap)

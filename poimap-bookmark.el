@@ -48,7 +48,7 @@ The foreground color is used."
   :type 'number
   :group 'poimap)
 
-(defcustom poimap-bookmark-size (cons 12 12)
+(defcustom poimap-bookmark-size 12
   "Size passed to `poimap-bookmark-shape-function'."
   :type '(choice number (cons number number))
   :group 'poimap)

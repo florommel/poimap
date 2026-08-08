@@ -38,7 +38,7 @@
 The foreground color is used."
   :group 'poimap)
 
-(defcustom poimap-current-symbol-shape-function #'poimap-circle
+(defcustom poimap-current-symbol-shape-function #'poimap-ellipse
   "Function used to draw current-symbol POIs."
   :type 'function
   :group 'poimap)
@@ -48,7 +48,7 @@ The foreground color is used."
   :type '(choice number (cons number number))
   :group 'poimap)
 
-(defcustom poimap-current-symbol-size 2.5
+(defcustom poimap-current-symbol-size 5
   "Size passed to `poimap-current-symbol-shape-function'."
   :type 'number
   :group 'poimap)

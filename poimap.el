@@ -167,7 +167,7 @@ Its foreground is used for the point marker."
   "Functions that return point-of-interest SVG for the current buffer.
 
 Each function is called in the current buffer and should return an SVG string,
-usually by calling shape functions such as `poimap-circle', `poimap-range', or
+usually by calling shape functions such as `poimap-ellipse', `poimap-range', or
 `poimap-tick' and joining the results to a single string."
   :type 'hook
   :group 'poimap)
@@ -310,6 +310,10 @@ Static string and number values are directly inserted."
    (list
     (concat
      "<defs>"
+     "<symbol id=\"ellipse\" viewBox=\"0 0 2 2\" "
+     "preserveAspectRatio=\"none\" overflow=\"visible\">"
+     "<circle r=\"1\" fill=\"currentColor\" shape-rendering=\"auto\"/>"
+     "</symbol>"
      "<symbol id=\"diamond\" viewBox=\"0 0 2 2\" "
      "preserveAspectRatio=\"none\" overflow=\"visible\">"
      "<path d=\"M0-1 1 0 0 1-1 0z\" shape-rendering=\"auto\" "
@@ -336,17 +340,12 @@ Static string and number values are directly inserted."
  (:x str :y str :width str :height str :fill str :transform str))
 
 (poimap--svg-template
- poimap--svg-circle-t circle
- (:cx str :cy str :r str :fill str :stroke str :stroke-width str
-      :shape-rendering "auto"))
-
-(poimap--svg-template
- poimap--svg-circle circle
- (:cx str :cy str :r str :fill str :shape-rendering "auto"))
-
-(poimap--svg-template
  poimap--svg-line line
  (:x1 str :y1 str :x2 str :y2 str :stroke str :stroke-width str))
+
+(poimap--svg-template
+ poimap--svg-ellipse use
+ (:x str :y str :width str :height str :color str :href "#ellipse"))
 
 (poimap--svg-template
  poimap--svg-diamond use
@@ -370,7 +369,7 @@ Static string and number values are directly inserted."
               (lsh (nth 1 rgb) -8)
               (lsh (nth 2 rgb) -8)))))
 
-(defun poimap-svg-ytranslate (vert height)
+(defun poimap-svg-ytranslate (height vert)
   "Get the vertical translate based on HEIGHT"
   (concat "translate(0 "
           (cond
@@ -379,20 +378,33 @@ Static string and number values are directly inserted."
            (t (number-to-string (/ height -2.0))))
           ")"))
 
-(defun poimap-circle (pos vert size color)
-  "Return SVG for a filled circle at POS and VERT with SIZE and COLOR.
-SIZE is height-relative."
-  (poimap--svg-circle (poimap--percent pos)
-                      (poimap--percent vert)
-                      (number-to-string size)
-                      color))
+(defun poimap-svg-xytranslate (width height vert)
+  "Get the horizontal and vertical translate based on WIDTH and HEIGHT"
+  (concat "translate("
+          (number-to-string (/ width -2.0))
+          " "
+          (cond
+           ((= vert 0) "0")
+           ((= vert 1) (number-to-string (* -1 height)))
+           (t (number-to-string (/ height -2.0))))
+          ")"))
+
+(defun poimap-ellipse (pos vert size color)
+  "Return SVG for a ellipse at POS and VERT with SIZE and COLOR.
+SIZE is the absolute size -- either a number or a cons cell (WIDTH . HEIGHT)"
+  (let* ((width  (if (consp size) (car size) size))
+         (height (if (consp size) (cdr size) size)))
+    (poimap--svg-ellipse (poimap--percent pos)
+                         (poimap--percent vert)
+                         (number-to-string width)
+                         (number-to-string height)
+                         color)))
 
 (defun poimap-diamond (pos vert size color)
-  "Return SVG for a filled diamond at POS and VERT with SIZE and COLOR.
-SIZE is a cons cell of the form (WIDTH . HEIGHT), with both dimensions
-height-relative."
-  (let* ((width  (car size))
-         (height (cdr size)))
+  "Return SVG for a diamond at POS and VERT with SIZE and COLOR.
+SIZE is the absolute size -- either a number or a cons cell (WIDTH . HEIGHT)"
+  (let* ((width  (if (consp size) (car size) size))
+         (height (if (consp size) (cdr size) size)))
     (poimap--svg-diamond (poimap--percent pos)
                          (poimap--percent vert)
                          (number-to-string width)
@@ -400,18 +412,32 @@ height-relative."
                          color)))
 
 (defun poimap-xcross (pos vert size color)
-  "Return SVG for an x cross at POS and VERT with SIZE and COLOR.
-SIZE is a cons cell of the form (WIDTH . HEIGHT), with both dimensions
-height-relative."
-  (let* ((width  (car size))
-         (height (cdr size)))
+  "Return SVG for a x cross at POS and VERT with SIZE and COLOR.
+SIZE is the absolute size -- either a number or a cons cell (WIDTH . HEIGHT)"
+  (let* ((width  (if (consp size) (car size) size))
+         (height (if (consp size) (cdr size) size)))
     (poimap--svg-xcross (poimap--percent pos)
                         (poimap--percent vert)
                         (number-to-string width)
                         (number-to-string height)
                         color)))
 
+(defun poimap-tick (pos vert size color)
+  "Return SVG for a tick mark (rect) at POS and VERT with SIZE and COLOR.
+SIZE is the absolute size -- either a number or a cons cell (WIDTH . HEIGHT)"
+  (let* ((width  (if (consp size) (car size) size))
+         (height (if (consp size) (cdr size) size)))
+    (poimap--svg-rect-t (poimap--percent pos)
+                        (poimap--percent vert)
+                        (number-to-string width)
+                        (number-to-string height)
+                        color
+                        (poimap-svg-xytranslate width height vert))))
+
 (defun poimap-range (pos vert size color)
+  "Return SVG for a range at POS and VERT with SIZE and COLOR.
+This is different from the other shape functions:
+POS is a cons cell of the form (FROM . TO) and size is always a number."
   (let* ((x1 (car pos))
          (x2 (cdr pos)))
     (poimap--svg-rect-t (poimap--percent x1)
@@ -419,19 +445,7 @@ height-relative."
                         (poimap--percent (- x2 x1))
                         (number-to-string size)
                         color
-                        (poimap-svg-ytranslate vert size))))
-
-(defun poimap-tick (pos vert size color)
-  "Return SVG for a vertical line at POS and VERT with SIZE and COLOR.
-SIZE is a cons (ABSOLUTE-WIDTH . RELATIVE-HEIGHT)."
-  (let* ((width  (car size))
-         (height (cdr size)))
-    (poimap--svg-rect-t (poimap--percent pos)
-                        (poimap--percent vert)
-                        (number-to-string width)
-                        (number-to-string height)
-                        color
-                        (poimap-svg-ytranslate vert height))))
+                        (poimap-svg-ytranslate size vert))))
 
 (defvar-local poimap--pois nil
   "Alist mapping POI interest functions to their cached SVG strings.")

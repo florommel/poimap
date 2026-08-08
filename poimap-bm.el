@@ -47,7 +47,7 @@ The foreground color is used."
   :type 'number
   :group 'poimap)
 
-(defcustom poimap-bm-size (cons 12 12)
+(defcustom poimap-bm-size 12
   "Size passed to `poimap-bm-shape-function'."
   :type '(choice number (cons number number))
   :group 'poimap)

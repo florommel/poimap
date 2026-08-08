@@ -38,7 +38,7 @@
 The foreground color is used."
   :group 'poimap)
 
-(defcustom poimap-isearch-shape-function #'poimap-circle
+(defcustom poimap-isearch-shape-function #'poimap-ellipse
   "Function used to draw Isearch POIs."
   :type 'function
   :group 'poimap)
@@ -48,7 +48,7 @@ The foreground color is used."
   :type '(choice number (cons number number))
   :group 'poimap)
 
-(defcustom poimap-isearch-size 3
+(defcustom poimap-isearch-size 6
   "Size passed to `poimap-isearch-shape-function'."
   :type 'number
   :group 'poimap)

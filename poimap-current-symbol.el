@@ -78,7 +78,8 @@ Return nil if there is no symbol under point."
                         (face-foreground 'poimap-current-symbol-face
                                          nil 'default)))
                 (svg))
-            (if (eq symbol poimap-current-symbol--last)
+            (if (and (not force)
+                     (eq symbol poimap-current-symbol--last))
                 nil  ;; We already did the search
               (cl-block nil
                 (save-excursion
@@ -102,6 +103,7 @@ Return nil if there is no symbol under point."
         ""))))
 
 (defvar-local poimap-current-symbol--idle-timer nil)
+(put 'poimap-current-symbol--idle-timer 'permanent-local t)
 
 (defun poimap-current-symbol--idle-refresh (&rest _args)
   "Schedule a buffer-local idle timer, unless one is already pending."

@@ -483,6 +483,10 @@ the color."
 (defvar-local poimap--last-update-window nil
   "The last window that triggered an idle POI update in this buffer")
 
+;; A major-mode change resets ordinary buffer-local variables. Keep them.
+(put 'poimap--idle-update-timer 'permanent-local t)
+(put 'poimap--idle-update-foce 'permanent-local t)
+
 (defun poimap-last-update-window ()
   "Get the window that triggered an idle POI update in the current buffer"
   poimap--last-update-window)
@@ -547,11 +551,11 @@ if necessary.  Return nil when POS starts outside the buffer."
 
 (defun poimap--request-idle-update (&optional force window)
   "Arrange for an idle POI update for the current buffer.
-WINDOW is set as `poimap--last-window' if not nil."
+WINDOW is set as `poimap--last-update-window' if not nil."
   (when force
     (setq poimap--idle-update-foce t))
   (when window
-    (setq poimap--last-window window))
+    (setq poimap--last-update-window window))
   (unless poimap--idle-update-timer
     (setq poimap--idle-update-timer
           (run-with-idle-timer

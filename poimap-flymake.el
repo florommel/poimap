@@ -106,6 +106,7 @@ The foreground color is used."
       (mapconcat #'identity (mapcan #'identity (nreverse svg))))))
 
 (defvar-local poimap-flymake--idle-timer nil)
+(put 'poimap-flymake--idle-timer 'permanent-local t)
 
 (defun poimap-flymake--refresh (&rest _args)
   "Refresh Flymake POIs in the current buffer."

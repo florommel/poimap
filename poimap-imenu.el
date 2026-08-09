@@ -192,7 +192,8 @@ is recalculated."
                         (/= current-tick previous-tick))
                 (when-let (pois (poimap-imenu--update t t))
                   (setf (alist-get 'poimap-imenu--update poimap--pois) pois)
-                  (force-mode-line-update))))))))))
+                  (force-mode-line-update)))))))
+      (setq poimap-imenu--rescan nil))))
 
 (defun poimap-imenu--create-index-function-watcher
     (_symbol _new-value _operation where)

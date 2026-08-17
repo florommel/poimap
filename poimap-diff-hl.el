@@ -67,7 +67,7 @@ The foreground color is used."
   :group 'poimap)
 
 (defun poimap-diff-hl--update (force)
-  "Return SVG for diff-hl markers."
+  "Update diff-hl POIs when FORCE is non-nil."
   (when force
     (let ((color-insert (poimap-emacs-to-svg-color
                          (face-foreground 'poimap-diff-hl-insert nil 'default)))
@@ -93,12 +93,13 @@ The foreground color is used."
            ((eq type 'delete)
             (when-let (pos (poimap-map-position (overlay-start ov)))
               (push (poimap-tick pos vert del-size color-delete) svg))))))
-      (mapconcat #'identity (mapcan #'identity (nreverse svg))))))
+      (poimap-update-pois
+       'poimap-diff-hl
+       (mapconcat #'identity (mapcan #'identity (nreverse svg)))))))
 
 (defun poimap-diff-hl--update-advice (&rest _args)
-  (when-let (pois (poimap-diff-hl--update t))
-    (setf (alist-get 'poimap-diff-hl--update poimap--pois) pois)
-    (force-mode-line-update)))
+  (poimap-diff-hl--update t)
+  (force-mode-line-update))
 
 ;;;###autoload
 (define-minor-mode poimap-diff-hl

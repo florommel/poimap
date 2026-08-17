@@ -53,7 +53,7 @@ The foreground color is used."
   :group 'poimap)
 
 (defun poimap-bm--update (force)
-  "Return SVG for bm bookmarks."
+  "Update bm bookmark POIs when FORCE is non-nil."
   (when force
     (let ((shape-fn poimap-bm-shape-function)
           (vert poimap-bm-vertical-position)
@@ -64,12 +64,13 @@ The foreground color is used."
       (dolist (ov (bm-overlay-in-buffer))
         (when-let (pos (poimap-map-position (overlay-start ov)))
           (push (funcall shape-fn pos vert size color) svg)))
-      (mapconcat #'identity (mapcan #'identity (nreverse svg))))))
+      (poimap-update-pois
+       'poimap-bm
+       (mapconcat #'identity (mapcan #'identity (nreverse svg)))))))
 
 (defun poimap-bm--update-advice (&rest _args)
-  (when-let (pois (poimap-bm--update t))
-    (setf (alist-get 'poimap-bm--update poimap--pois) pois)
-    (force-mode-line-update)))
+  (poimap-bm--update t)
+  (force-mode-line-update))
 
 ;;;###autoload
 (define-minor-mode poimap-bm

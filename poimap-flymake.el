@@ -82,7 +82,7 @@ The foreground color is used."
    (t 'poimap-flymake-default-face)))
 
 (defun poimap-flymake--update (force)
-  "Return SVG for Flymake diagnostics when FORCE is non-nil."
+  "Update flymake POIs when FORCE is non-nil."
   (when force
     (let ((shape-fn poimap-flymake-shape-function)
           (vert poimap-flymake-vertical-position)
@@ -103,7 +103,9 @@ The foreground color is used."
                                       (poimap-emacs-to-svg-color
                                        (face-foreground face nil 'default))))))
                 (push (funcall shape-fn pos vert size color) svg))))))
-      (mapconcat #'identity (mapcan #'identity (nreverse svg))))))
+      (poimap-update-pois
+       'poimap-flymake
+       (mapconcat #'identity (mapcan #'identity (nreverse svg)))))))
 
 (defvar-local poimap-flymake--idle-timer nil)
 (put 'poimap-flymake--idle-timer 'permanent-local t)
@@ -119,10 +121,8 @@ The foreground color is used."
                (when (buffer-live-p buffer)
                  (with-current-buffer buffer
                    (setq poimap-flymake--idle-timer nil)
-                   (when-let ((pois (poimap-flymake--update t)))
-                     (setf (alist-get 'poimap-flymake--update poimap--pois)
-                           pois)
-                     (force-mode-line-update)))))
+                   (poimap-flymake--update t)
+                   (force-mode-line-update))))
              buffer)))))
 
 ;;;###autoload

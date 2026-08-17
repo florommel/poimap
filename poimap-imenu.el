@@ -69,7 +69,7 @@ The foreground color is used."
   :group 'poimap)
 
 (defface poimap-imenu-default-face
-  '((t :inherit font-lock-keyword-face))
+  '((t :inherit font-lock-function-name-face))
   "Face for poimap imenu default POIs.
 
 The foreground color is used."
@@ -97,7 +97,7 @@ is recalculated."
   :group 'poimap)
 
 (defun poimap-imenu--update (force &optional rescan)
-  "Return SVG for Imenu items."
+  "Update imenu POIs when FORCE is non-nil."
   (when force
     (let ((svg)
           (shape-fn poimap-imenu-shape-function)
@@ -159,7 +159,9 @@ is recalculated."
                    (when (imenu--subalist-p item)
                      (walk name (cdr item)))))))
           (walk nil index)
-          (mapconcat #'identity (mapcan #'identity (nreverse svg))))))))
+          (poimap-update-pois
+           'poimap-imenu
+           (mapconcat #'identity (mapcan #'identity (nreverse svg)))))))))
 
 (defvar poimap-imenu--refresh-ticks (make-hash-table :test #'eq)
   "Last observed modification tick for each visible buffer.")
@@ -187,12 +189,11 @@ is recalculated."
             (let* ((current-tick (buffer-chars-modified-tick))
                    (previous-tick
                     (gethash buffer poimap-imenu--refresh-ticks current-tick)))
-              (puthash buffer current-tick poimap-imenu--refresh-ticks)
               (when (or poimap-imenu--rescan
                         (/= current-tick previous-tick))
-                (when-let (pois (poimap-imenu--update t t))
-                  (setf (alist-get 'poimap-imenu--update poimap--pois) pois)
-                  (force-mode-line-update)))))))
+                (poimap-imenu--update t t)
+                (puthash buffer current-tick poimap-imenu--refresh-ticks)
+                (force-mode-line-update))))))
       (setq poimap-imenu--rescan nil))))
 
 (defun poimap-imenu--create-index-function-watcher

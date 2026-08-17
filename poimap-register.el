@@ -53,7 +53,7 @@ The foreground color is used."
   :group 'poimap)
 
 (defun poimap-register--update (force)
-  "Return SVG for registers."
+  "Update register POIs when FORCE is non-nil."
   (when force
     (let ((shape-fn poimap-register-shape-function)
           (vert poimap-register-vertical-position)
@@ -75,7 +75,9 @@ The foreground color is used."
                                    (poimap-map-position (caddr val)))))
              (push (funcall shape-fn pos vert size color) svg))))
        register-alist)
-      (mapconcat #'identity (mapcan #'identity (nreverse svg))))))
+      (poimap-update-pois
+       'poimap-register
+       (mapconcat #'identity (mapcan #'identity (nreverse svg)))))))
 
 (defun poimap-register--advice (&rest _args)
   (let ((buffers (delete-dups
@@ -83,9 +85,8 @@ The foreground color is used."
                           (window-list-1 nil 'no-minibuffer t)))))
     (dolist (buffer buffers)
       (with-current-buffer buffer
-        (when-let (pois (poimap-register--update t))
-          (setf (alist-get 'poimap-register--update poimap--pois) pois)
-          (force-mode-line-update))))))
+        (poimap-register--update t)
+        (force-mode-line-update)))))
 
 ;;;###autoload
 (define-minor-mode poimap-register

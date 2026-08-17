@@ -59,48 +59,48 @@ The foreground color is used."
   "Last current symbol.")
 
 (defun poimap-current-symbol--update (force)
-  "Return SVG for all occurrences of the symbol at point.
-Return nil if there is no symbol under point."
+  "Update POIs for occurrences of the symbol at point when FORCE is non-nil.
+Return t when the POIs were updated, and nil otherwise."
   (when force
-    (if (or poimap-current-symbol--inhibitors
-            (> (point-max) 4194304))  ;; buffer size > 4MiB
-        ""
-      (if-let ((bounds (bounds-of-thing-at-point 'symbol)))
-          (let ((symbol (buffer-substring-no-properties
-                         (car bounds)
-                         (cdr bounds)))
-                (case-fold-search nil)
-                (count 0)
-                (shape-fn poimap-current-symbol-shape-function)
-                (vert poimap-current-symbol-vertical-position)
-                (size poimap-current-symbol-size)
-                (color (poimap-emacs-to-svg-color
-                        (face-foreground 'poimap-current-symbol-face
-                                         nil 'default)))
-                (svg))
-            (if (and (not force)
-                     (eq symbol poimap-current-symbol--last))
-                nil  ;; We already did the search
-              (cl-block nil
-                (save-excursion
-                  (save-restriction
-                    (widen)
-                    (goto-char (point-min))
-                    (while (re-search-forward
-                            (concat "\\_<" (regexp-quote symbol) "\\_>")
-                            nil t)
-                      (when-let (pos (poimap-map-position (match-beginning 0)))
-                        (cl-incf count)
-                        (when (> count 300)
-                          (setq poimap-current-symbol--last symbol)
-                          (cl-return ""))
-                        (push (funcall shape-fn pos vert size color) svg)))))
-                ;; FIXME: Too early.. this should be set after the pois are set!
-                (setq poimap-current-symbol--last symbol)
-                (if (<= count 1)
-                    ""
-                  (mapconcat #'identity (mapcan #'identity (nreverse svg)))))))
-        ""))))
+    (if-let ((bounds (and (not poimap-current-symbol--inhibitors)
+                          (<= (point-max) 4194304) ; buffer size <= 4MiB
+                          (bounds-of-thing-at-point 'symbol))))
+        (let ((symbol (buffer-substring-no-properties
+                       (car bounds) (cdr bounds))))
+          ;; FIXME: We also need to update if the buffer changed
+          (if (equal symbol poimap-current-symbol--last)
+              nil  ; We already did the search.
+            (let* ((case-fold-search nil)
+                   (count 0)
+                   (shape-fn poimap-current-symbol-shape-function)
+                   (vert poimap-current-symbol-vertical-position)
+                   (size poimap-current-symbol-size)
+                   (color (poimap-emacs-to-svg-color
+                           (face-foreground 'poimap-current-symbol-face
+                                            nil 'default)))
+                   (svg)
+                   (pois
+                    (save-excursion
+                      (save-restriction
+                        (widen)
+                        (goto-char (point-min))
+                        (while (and (<= count 300)
+                                    (re-search-forward
+                                     (concat "\\_<" (regexp-quote symbol) "\\_>")
+                                     nil t))
+                          (when-let (pos (poimap-map-position (match-beginning 0)))
+                            (cl-incf count)
+                            (when (<= count 300)
+                              (push (funcall shape-fn pos vert size color)
+                                    svg))))
+                        (if (or (<= count 1) (> count 300))
+                            ""
+                          (mapconcat #'identity
+                                     (mapcan #'identity (nreverse svg))))))))
+              (when pois
+                (poimap-update-pois 'poimap-current-symbol pois)
+                (setq poimap-current-symbol--last symbol)))))
+      (poimap-update-pois 'poimap-current-symbol ""))))
 
 (defvar-local poimap-current-symbol--idle-timer nil)
 (put 'poimap-current-symbol--idle-timer 'permanent-local t)
@@ -116,17 +116,15 @@ Return nil if there is no symbol under point."
                (when (buffer-live-p buffer)
                  (with-current-buffer buffer
                    (setq poimap-current-symbol--idle-timer nil)
-                   (when-let (pois (poimap-current-symbol--update t))
-                     (setf (alist-get 'poimap-current-symbol--update poimap--pois)
-                           pois)
-                     (force-mode-line-update)))))
+                   (poimap-current-symbol--update t)
+                   (force-mode-line-update))))
              buffer)))))
 
 (defun poimap-current-symbol-inhibit (tag)
   "Temporarily disable the poimap current-symbol indicators for inhibitor TAG."
   (when (not (memq tag poimap-current-symbol--inhibitors))
     (push tag poimap-current-symbol--inhibitors)
-    (setf (alist-get 'poimap-current-symbol--update poimap--pois) "")))
+    (poimap-update-pois 'poimap-current-symbol "")))
 
 (defun poimap-current-symbol-reactivate (tag)
   "Reactivate the poimap current-symbol indicators for inhibitor TAG.
@@ -143,11 +141,9 @@ reactivated."
   :group 'poimap
   (if poimap-current-symbol
       (progn
-        (add-hook 'poimap-idle-update-functions
-                  #'poimap-current-symbol--update)
+        (add-hook 'poimap-idle-update-functions #'poimap-current-symbol--update)
         (add-hook 'post-command-hook #'poimap-current-symbol--idle-refresh))
-    (remove-hook 'poimap-idle-update-functions
-                 #'poimap-current-symbol--update)
+    (remove-hook 'poimap-idle-update-functions #'poimap-current-symbol--update)
     (remove-hook 'post-command-hook #'poimap-current-symbol--idle-refresh)))
 
 (provide 'poimap-current-symbol)

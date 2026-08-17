@@ -55,40 +55,42 @@ The foreground color is used."
 
 ;; FIXME: Leaks into other buffer if changed with an active session
 (defun poimap-swiper--update (_force)
-  "Return SVG for current `swiper' matches."
-  (if (and (buffer-local-value 'ivy--minibuffer
-                               (window-buffer (active-minibuffer-window)))
-           (eq (ivy-state-caller ivy-last) 'swiper)
-           (< (length ivy--old-cands) 2000) ;;FIXME
-           (or
-            (eq (current-buffer) (window-buffer (minibuffer-selected-window)))
-            (eq (current-buffer) (window-buffer (selected-window)))))
-      (with-ivy-window
-        (when (fboundp 'poimap-current-symbol-inhibit)
-          (poimap-current-symbol-inhibit 'swiper))
-        (let ((shape-fn poimap-swiper-shape-function)
-              (vert poimap-swiper-vertical-position)
-              (size poimap-swiper-size)
-              (color (poimap-emacs-to-svg-color
-                      (face-foreground 'poimap-swiper-face nil 'default))))
-          (mapconcat
-           #'identity
-           (mapcan
+  "Update current swiper match POIs"
+  (poimap-update-pois
+   'poimap-swiper
+   (if (and (buffer-local-value 'ivy--minibuffer
+                                (window-buffer (active-minibuffer-window)))
+            (eq (ivy-state-caller ivy-last) 'swiper)
+            (< (length ivy--old-cands) 2000) ;;FIXME
+            (or
+             (eq (current-buffer) (window-buffer (minibuffer-selected-window)))
+             (eq (current-buffer) (window-buffer (selected-window)))))
+       (with-ivy-window
+         (when (fboundp 'poimap-current-symbol-inhibit)
+           (poimap-current-symbol-inhibit 'swiper))
+         (let ((shape-fn poimap-swiper-shape-function)
+               (vert poimap-swiper-vertical-position)
+               (size poimap-swiper-size)
+               (color (poimap-emacs-to-svg-color
+                       (face-foreground 'poimap-swiper-face nil 'default))))
+           (mapconcat
             #'identity
-            (delq nil
-                  (mapcar
-                   (lambda (cand)
-                     (let ((line (swiper--line-number cand)))
-                       (save-excursion
-                         (goto-char (point-min))
-                         (forward-line (1- line))
-                         (when-let (pos (poimap-map-position
-                                         (line-beginning-position)))
-                           (funcall shape-fn pos vert size color)))))
-                   ivy--old-cands))))))
-    (when (fboundp 'poimap-current-symbol-reactivate)
-      (poimap-current-symbol-reactivate 'swiper))
-    ""))
+            (mapcan
+             #'identity
+             (delq nil
+                   (mapcar
+                    (lambda (cand)
+                      (let ((line (swiper--line-number cand)))
+                        (save-excursion
+                          (goto-char (point-min))
+                          (forward-line (1- line))
+                          (when-let (pos (poimap-map-position
+                                          (line-beginning-position)))
+                            (funcall shape-fn pos vert size color)))))
+                    ivy--old-cands))))))
+     (when (fboundp 'poimap-current-symbol-reactivate)
+       (poimap-current-symbol-reactivate 'swiper))
+     "")))
 
 ;;;###autoload
 (define-minor-mode poimap-swiper

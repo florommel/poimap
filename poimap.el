@@ -164,11 +164,17 @@ Its foreground is used for the point marker."
   :group 'poimap)
 
 (defcustom poimap-idle-update-functions nil
-  "Functions that return point-of-interest SVG for the current buffer.
+  "Functions that update point-of-interest SVG for the current buffer.
 
-Each function is called in the current buffer and should return an SVG string,
-usually by calling shape functions such as `poimap-ellipse', `poimap-range', or
-`poimap-tick' and joining the results to a single string."
+Each function is called in the current buffer and should pass its SVG string to
+`poimap-update-pois' if it can / wants to update its POIs, usually after calling
+shape functions such as `poimap-ellipse', `poimap-range', or `poimap-tick' and
+joining the results to a single string.
+
+Each function is passed one parameter FORCE which is non-nil if the function
+might want to update its POIs unconditionally, e.g., at buffer contents or
+buffer window changes.  However, this is just a hint.  The function can still
+decide not to recalculate its POIs and rely on other update hooks."
   :type 'hook
   :group 'poimap)
 
@@ -491,6 +497,12 @@ the color."
   "Get the window that triggered an idle POI update in the current buffer"
   poimap--last-update-window)
 
+(defun poimap-update-pois (category pois)
+  "Cache POIS for interest CATEGORY (symbol) in the current buffer.
+When POIS is non-nil, store it in `poimap--pois' and return POIS."
+  (when pois
+    (setf (alist-get category poimap--pois) pois)))
+
 ;; (unless (image-type-available-p 'svg)
 ;;   (user-error "This Emacs was built without SVG image support"))
 
@@ -517,16 +529,15 @@ if necessary.  Return nil when POS starts outside the buffer."
         (poimap--factor pos min-pos max-pos)))))
 
 (defun poimap--idle-update-buffer-pois ()
-  "Update `poimap--pois' by invoking `poimap-idle-update-functions' for WINDOW."
+  "Invoke `poimap-idle-update-functions' in the current buffer."
   (let ((return nil))
     (dolist (fn poimap-idle-update-functions)
-      (when-let (pois (condition-case err
-                          (funcall fn poimap--idle-update-foce)
-                        (error
-                         (message "poimap: POI function %S failed: %s"
-                                  fn (error-message-string err))
-                         "")))
-        (setf (alist-get fn poimap--pois) pois)
+      (when (condition-case err
+                (funcall fn poimap--idle-update-foce)
+              (error
+               (message "poimap: POI function %S failed: %s"
+                        fn (error-message-string err))
+               nil))
         (setq return 'update)))
     return))
 

@@ -54,40 +54,42 @@ The foreground color is used."
   :group 'poimap)
 
 (defun poimap-isearch--update (_force)
-  "Return SVG for active isearch matches in the current buffer."
-  (if (and (bound-and-true-p isearch-mode)
-           (boundp 'isearch-string)
-           (stringp isearch-string)
-           (not (string-empty-p isearch-string)))
-      (save-excursion
-        (save-restriction
-          (when (fboundp 'poimap-current-symbol-inhibit)
-            (poimap-current-symbol-inhibit 'isearch))
-          (widen)
-          (let ((case-fold-search (if (boundp 'isearch-case-fold-search)
-                                      isearch-case-fold-search
-                                    case-fold-search))
-                (regexp (if (and (boundp 'isearch-regexp) isearch-regexp)
-                            isearch-string
-                          (regexp-quote isearch-string)))
-                (shape-fn poimap-isearch-shape-function)
-                (vert poimap-isearch-vertical-position)
-                (size poimap-isearch-size)
-                (color (poimap-emacs-to-svg-color
-                        (face-foreground 'poimap-isearch-face nil 'default)))
-                (svg))
-            (goto-char (point-min))
-            (while (and (not (eobp))
-                        (re-search-forward regexp nil t))
-              (when-let (pos (poimap-map-position (match-beginning 0)))
-                (push (funcall shape-fn pos vert size color) svg))
-              ;; Protect against zero-length regex matches.
-              (when (= (match-beginning 0) (match-end 0))
-                (forward-char 1)))
-            (mapconcat #'identity (mapcan #'identity (nreverse svg))))))
-    (when (fboundp 'poimap-current-symbol-reactivate)
-      (poimap-current-symbol-reactivate 'isearch))
-    ""))
+  "Update active Isearch match POIs in the current buffer."
+  (poimap-update-pois
+   'poimap-isearch
+   (if (and (bound-and-true-p isearch-mode)
+            (boundp 'isearch-string)
+            (stringp isearch-string)
+            (not (string-empty-p isearch-string)))
+       (save-excursion
+         (save-restriction
+           (when (fboundp 'poimap-current-symbol-inhibit)
+             (poimap-current-symbol-inhibit 'isearch))
+           (widen)
+           (let ((case-fold-search (if (boundp 'isearch-case-fold-search)
+                                       isearch-case-fold-search
+                                     case-fold-search))
+                 (regexp (if (and (boundp 'isearch-regexp) isearch-regexp)
+                             isearch-string
+                           (regexp-quote isearch-string)))
+                 (shape-fn poimap-isearch-shape-function)
+                 (vert poimap-isearch-vertical-position)
+                 (size poimap-isearch-size)
+                 (color (poimap-emacs-to-svg-color
+                         (face-foreground 'poimap-isearch-face nil 'default)))
+                 (svg))
+             (goto-char (point-min))
+             (while (and (not (eobp))
+                         (re-search-forward regexp nil t))
+               (when-let (pos (poimap-map-position (match-beginning 0)))
+                 (push (funcall shape-fn pos vert size color) svg))
+               ;; Protect against zero-length regex matches.
+               (when (= (match-beginning 0) (match-end 0))
+                 (forward-char 1)))
+             (mapconcat #'identity (mapcan #'identity (nreverse svg))))))
+     (when (fboundp 'poimap-current-symbol-reactivate)
+       (poimap-current-symbol-reactivate 'isearch))
+     "")))
 
 ;;;###autoload
 (define-minor-mode poimap-isearch

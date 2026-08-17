@@ -55,7 +55,9 @@ The foreground color is used."
 
 (defun poimap-bookmark--update (force)
   "Return SVG for bookmarks."
-  (when force
+  (poimap-update-pois
+   'poimap-bookmark
+   (when force
     (let* ((shape-fn poimap-bookmark-shape-function)
            (vert poimap-bookmark-vertical-position)
            (size poimap-bookmark-size)
@@ -75,7 +77,7 @@ The foreground color is used."
       (dolist (bp bps)
         (when-let (pos (poimap-map-position bp))
           (push (funcall shape-fn pos vert size color) svg)))
-      (mapconcat #'identity (mapcan #'identity (nreverse svg))))))
+      (mapconcat #'identity (mapcan #'identity (nreverse svg)))))))
 
 (defun poimap-bookmark--bookmark-count-watcher
     (_symbol _newval _operation _where)
@@ -85,8 +87,7 @@ The foreground color is used."
                           (window-list-1 nil 'no-minibuffer t)))))
     (dolist (buffer buffers)
       (with-current-buffer buffer
-        (when-let (pois (poimap-bookmark--update t))
-          (setf (alist-get 'poimap-bookmark--update poimap--pois) pois)
+        (when (poimap-bookmark--update t)
           (force-mode-line-update))))))
 
 ;;;###autoload

@@ -43,12 +43,12 @@ The foreground color is used."
   :type 'function
   :group 'poimap)
 
-(defcustom poimap-isearch-vertical-position 0.65
+(defcustom poimap-isearch-vertical-position 0.6
   "Vertical position of Isearch POIs."
   :type '(choice number (cons number number))
   :group 'poimap)
 
-(defcustom poimap-isearch-size 6
+(defcustom poimap-isearch-size 3
   "Size passed to `poimap-isearch-shape-function'."
   :type 'number
   :group 'poimap)
@@ -97,8 +97,12 @@ The foreground color is used."
   :global t
   :group 'poimap
   (if poimap-isearch
-      (add-hook 'poimap-idle-update-functions #'poimap-isearch--update)
-    (remove-hook 'poimap-idle-update-functions #'poimap-isearch--update)))
+      (progn
+        (poimap--warn-unless-mode 'poimap-isearch)
+        (add-hook 'poimap-idle-update-functions #'poimap-isearch--update)
+        (poimap--for-all-visible-window-buffers #'poimap-isearch--update t))
+    (remove-hook 'poimap-idle-update-functions #'poimap-isearch--update)
+    (poimap--clear-buffer-state 'poimap-isearch)))
 
 (provide 'poimap-isearch)
 

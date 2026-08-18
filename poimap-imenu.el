@@ -85,7 +85,7 @@ The foreground color is used."
   :type 'number
   :group 'poimap)
 
-(defcustom poimap-imenu-size (cons 2 7)
+(defcustom poimap-imenu-size (cons 2 5)
   "Size passed to `poimap-imenu-shape-function'."
   :type '(choice number (cons number number))
   :group 'poimap)
@@ -209,20 +209,25 @@ is recalculated."
   :group 'poimap
   (if poimap-imenu
       (progn
+        (poimap--warn-unless-mode 'poimap-imenu)
         (add-hook 'poimap-idle-update-functions #'poimap-imenu--update)
         (add-variable-watcher
          'imenu-create-index-function
          #'poimap-imenu--create-index-function-watcher)
         (setq poimap-imenu--refresh-idle-timer
               (run-with-idle-timer poimap-imenu-rescan-idle-interval
-                                   t #'poimap-imenu--refresh)))
+                                   t #'poimap-imenu--refresh))
+        (poimap--for-all-visible-window-buffers #'poimap-imenu--update t))
     (remove-hook 'poimap-idle-update-functions #'poimap-imenu--update)
     (remove-variable-watcher
      'imenu-create-index-function
      #'poimap-imenu--create-index-function-watcher)
     (when (timerp poimap-imenu--refresh-idle-timer)
       (cancel-timer poimap-imenu--refresh-idle-timer))
-    (setq poimap-imenu--refresh-idle-timer nil)))
+    (setq poimap-imenu--refresh-idle-timer nil
+          poimap-imenu--rescan nil)
+    (clrhash poimap-imenu--refresh-ticks)
+    (poimap--clear-buffer-state 'poimap-imenu)))
 
 (provide 'poimap-imenu)
 

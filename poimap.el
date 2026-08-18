@@ -36,7 +36,7 @@
 (require 'subr-x)
 
 (defgroup poimap nil
-  "SVG projection of the current buffer's visible range."
+  "Visual buffer map with points of interest."
   :group 'convenience)
 
 (defface poimap-face '((t :inherit mode-line))
@@ -142,6 +142,21 @@ Its foreground is used for the point marker."
           (const :tag "Don't use a face" nil)
           (const :tag "Use the poimap faces" t))
   :group 'poimap)
+
+(defcustom poimap-add-to-mode-line t
+  "Whether `poimap-mode' adds poimap to `global-mode-string'.
+
+Set this to nil when your mode-line configuration evaluates
+`poimap-string' itself.  For example, include
+`(:eval (poimap-string))' in the relevant mode-line format."
+  :type 'boolean
+  :group 'poimap)
+
+(defvar poimap-mode-line-string '(:eval (poimap-string))
+  "Mode-line construct used by `poimap-mode'.")
+
+(defvar poimap-mode nil
+  "Non-nil when the global poimap mode is enabled.")
 
 (defcustom poimap-border-width 1
   "Border width of the poimap rectangle"
@@ -312,6 +327,7 @@ Static string and number values are directly inserted."
   '(list "</svg>"))
 
 (define-inline poimap--svg-defs ()
+  ;; TODO: Also macro generate this with nice syntax
   (inline-quote
    (list
     (concat
@@ -363,17 +379,20 @@ Static string and number values are directly inserted."
 
 (defun poimap-emacs-to-svg-color (color &optional alpha)
   "Convert Emacs COLOR to SVG-compatible #rrggbb."
-  (let ((rgb (color-values color)))
-    (if alpha
-        (format "#%02x%02x%02x%02x"
+  (if-let ((rgb (color-values color)))
+      (if alpha
+          (format "#%02x%02x%02x%02x"
+                  (lsh (nth 0 rgb) -8)
+                  (lsh (nth 1 rgb) -8)
+                  (lsh (nth 2 rgb) -8)
+                  (round (* alpha 255)))
+        (format "#%02x%02x%02x"
                 (lsh (nth 0 rgb) -8)
                 (lsh (nth 1 rgb) -8)
-                (lsh (nth 2 rgb) -8)
-                (* alpha 255))
-      (format "#%02x%02x%02x"
-              (lsh (nth 0 rgb) -8)
-              (lsh (nth 1 rgb) -8)
-              (lsh (nth 2 rgb) -8)))))
+                (lsh (nth 2 rgb) -8)))
+    (if alpha
+        (format "#808080%02x" (round (* alpha 255)))
+      "#808080")))
 
 (defun poimap-svg-ytranslate (height vert)
   "Get the vertical translate based on HEIGHT"
@@ -503,8 +522,24 @@ When POIS is non-nil, store it in `poimap--pois' and return POIS."
   (when pois
     (setf (alist-get category poimap--pois) pois)))
 
-;; (unless (image-type-available-p 'svg)
-;;   (user-error "This Emacs was built without SVG image support"))
+(defun poimap--clear-buffer-state (category &rest variables)
+  "Clear CATEGORY's cached POIs and buffer-local VARIABLES in all buffers.
+Timer values among VARIABLES are cancelled before their local bindings are
+removed.  When CATEGORY is nil, remove the entire POI itself."
+  (dolist (buffer (buffer-list))
+    (with-current-buffer buffer
+      (when (local-variable-p 'poimap--pois)
+        (if category
+            (progn
+              (setq poimap--pois (assq-delete-all category poimap--pois))
+              (unless poimap--pois
+                (kill-local-variable 'poimap--pois)))
+          (kill-local-variable 'poimap--pois)))
+      (dolist (variable variables)
+        (when (local-variable-p variable)
+          (when (timerp (symbol-value variable))
+            (cancel-timer (symbol-value variable)))
+          (kill-local-variable variable))))))
 
 (defun poimap-map-position (pos)
   "Return POS converted to a horizontal SVG map position.
@@ -582,19 +617,11 @@ WINDOW is set as `poimap--last-update-window' if not nil."
     (with-current-buffer buffer
       (poimap--request-idle-update nil window))))
 
-(add-hook 'post-command-hook
-          #'poimap--request-idle-update-for-command)
-;; FIXME !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-;; (remove-hook 'post-command-hook #'poimap--request-idle-update-for-command)
-
 (defun poimap--request-idle-update-for-buffer-text-change (&rest args)
   "Request an update for a buffer text change.
 This requests a normal (\"unforced\") idle update of POIs. This means POIs that
 react on update without the force parameter set are refreshed."
   (poimap--request-idle-update t))
-
-(add-hook 'after-change-functions
-          #'poimap--request-idle-update-for-buffer-text-change)
 
 (defun poimap--request-idle-update-for-window-buffer-change (frame)
   "Request an update for a window buffer change.
@@ -607,9 +634,6 @@ doesn't happen too often."
       (with-current-buffer (window-buffer window)
         (poimap--request-idle-update t window)))))
 
-(add-hook 'window-buffer-change-functions
-          #'poimap--request-idle-update-for-window-buffer-change)
-
 (defun poimap--request-idle-update-for-window-selection-change (frame)
   "Request an update for a window selection change.
 This requests a normal (\"unforced\") idle update of POIs."
@@ -619,8 +643,27 @@ This requests a normal (\"unforced\") idle update of POIs."
     (with-current-buffer (window-buffer window)
       (poimap--request-idle-update nil window))))
 
-(add-hook 'window-selection-change-functions
-          #'poimap--request-idle-update-for-window-selection-change)
+(defun poimap--update-all-visible-windows (&rest _)
+  "Force update all POIs for all visible windows."
+  (dolist (frame (visible-frame-list))
+    (dolist (window (window-list frame 'no-minibuf))
+      (set-window-parameter window 'poimap-cache nil)
+      (with-current-buffer (window-buffer window)
+        (poimap--request-idle-update t window))))
+  (force-mode-line-update t))
+
+(defun poimap-update-all ()
+  "Update the POIs for all visible windows."
+  (poimap--update-all-visible-windows))
+
+(defun poimap--for-all-visible-window-buffers (fn &rest args)
+  "Apply a poimap function for all visible window buffers."
+  (dolist (frame (visible-frame-list))
+    (dolist (window (window-list frame 'no-minibuf))
+      (set-window-parameter window 'poimap-cache nil)
+      (with-current-buffer (window-buffer window)
+        (apply fn args))))
+  (force-mode-line-update t))
 
 (defun poimap--svg (window width height active)
   "Return an SVG object showing WINDOW's visible range in the current buffer."
@@ -732,7 +775,7 @@ This requests a normal (\"unforced\") idle update of POIs."
                                              (poimap--svg window bar-width
                                                           bar-height active)
                                              :ascent 'center :scale 1)
-                              'help-echo "mouse-1: Go to position / drag to scroll"
+                              'help-echo (lambda (&rest _) nil) ;;"mouse-1: Go to position / drag to scroll"
                               'local-map '(keymap
                                            (mode-line
                                             keymap (down-mouse-1 . poimap-mouse)))
@@ -817,6 +860,63 @@ This requests a normal (\"unforced\") idle update of POIs."
                    (t
                     (push ev unread-command-events)
                     (setq done t))))))))))))
+
+(defun poimap--warn-unless-mode (extension)
+  "Warn when EXTENSION is enabled while `poimap-mode' is disabled."
+  (unless poimap-mode
+    (display-warning
+     'poimap
+     (format "%s requires `poimap-mode'; enable it with (poimap-mode 1)"
+             extension)
+     :warning)))
+
+;;;###autoload
+(define-minor-mode poimap-mode
+  "Globally maintain and display poimap buffer maps.
+
+When `poimap-add-to-mode-line' is non-nil, add `poimap-mode-line-string'
+to `global-mode-string'.  Set that option to nil to place
+`(:eval (poimap-string))' in a custom mode-line format yourself."
+  :global t
+  :group 'poimap
+  (if poimap-mode
+      (progn
+        (unless (image-type-available-p 'svg)
+          (user-error "poimap: This Emacs was built without SVG image support"))
+        (add-hook 'post-command-hook
+                  #'poimap--request-idle-update-for-command)
+        (add-hook 'after-change-functions
+                  #'poimap--request-idle-update-for-buffer-text-change)
+        (add-hook 'window-buffer-change-functions
+                  #'poimap--request-idle-update-for-window-buffer-change)
+        (add-hook 'window-selection-change-functions
+                  #'poimap--request-idle-update-for-window-selection-change)
+        (add-hook 'enable-theme-functions
+                  #'poimap--update-all-visible-windows)
+        (add-hook 'disable-theme-functions
+                  #'poimap--update-all-visible-windows)
+        (when poimap-add-to-mode-line
+          (add-to-list 'global-mode-string poimap-mode-line-string t))
+        (poimap-update-all))
+    (remove-hook 'post-command-hook
+                 #'poimap--request-idle-update-for-command)
+    (remove-hook 'after-change-functions
+                 #'poimap--request-idle-update-for-buffer-text-change)
+    (remove-hook 'window-buffer-change-functions
+                 #'poimap--request-idle-update-for-window-buffer-change)
+    (remove-hook 'window-selection-change-functions
+                 #'poimap--request-idle-update-for-window-selection-change)
+    (remove-hook 'enable-theme-functions
+                 #'poimap--update-all-visible-windows)
+    (remove-hook 'disable-theme-functions
+                 #'poimap--update-all-visible-windows)
+    (setq global-mode-string
+          (delete poimap-mode-line-string global-mode-string))
+    (poimap--clear-buffer-state nil
+                                'poimap--idle-update-timer
+                                'poimap--idle-update-foce
+                                'poimap--last-update-window))
+  (force-mode-line-update t))
 
 (provide 'poimap)
 

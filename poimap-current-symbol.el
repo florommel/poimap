@@ -43,12 +43,12 @@ The foreground color is used."
   :type 'function
   :group 'poimap)
 
-(defcustom poimap-current-symbol-vertical-position 0.65
+(defcustom poimap-current-symbol-vertical-position 0.6
   "Vertical position of current-symbol POIs."
   :type '(choice number (cons number number))
   :group 'poimap)
 
-(defcustom poimap-current-symbol-size 5
+(defcustom poimap-current-symbol-size 3
   "Size passed to `poimap-current-symbol-shape-function'."
   :type 'number
   :group 'poimap)
@@ -141,10 +141,17 @@ reactivated."
   :group 'poimap
   (if poimap-current-symbol
       (progn
+        (poimap--warn-unless-mode 'poimap-current-symbol)
         (add-hook 'poimap-idle-update-functions #'poimap-current-symbol--update)
-        (add-hook 'post-command-hook #'poimap-current-symbol--idle-refresh))
+        (add-hook 'post-command-hook #'poimap-current-symbol--idle-refresh)
+        (poimap--for-all-visible-window-buffers #'poimap-current-symbol--update t))
     (remove-hook 'poimap-idle-update-functions #'poimap-current-symbol--update)
-    (remove-hook 'post-command-hook #'poimap-current-symbol--idle-refresh)))
+    (remove-hook 'post-command-hook #'poimap-current-symbol--idle-refresh)
+    (poimap--clear-buffer-state
+     'poimap-current-symbol
+     'poimap-current-symbol--inhibitors
+     'poimap-current-symbol--last
+     'poimap-current-symbol--idle-timer)))
 
 (provide 'poimap-current-symbol)
 

@@ -43,12 +43,12 @@ The foreground color is used."
   :type 'function
   :group 'poimap)
 
-(defcustom poimap-bookmark-vertical-position 0.37
+(defcustom poimap-bookmark-vertical-position 0.6
   "Vertical position of bookmark POIs."
   :type 'number
   :group 'poimap)
 
-(defcustom poimap-bookmark-size 12
+(defcustom poimap-bookmark-size 7
   "Size passed to `poimap-bookmark-shape-function'."
   :type '(choice number (cons number number))
   :group 'poimap)
@@ -97,14 +97,17 @@ The foreground color is used."
   :group 'poimap
   (if poimap-bookmark
       (progn
+        (poimap--warn-unless-mode 'poimap-bookmark)
         (add-hook 'poimap-idle-update-functions #'poimap-bookmark--update)
         (add-variable-watcher
          'bookmark-alist-modification-count
-         #'poimap-bookmark--bookmark-count-watcher))
+         #'poimap-bookmark--bookmark-count-watcher)
+        (poimap--for-all-visible-window-buffers #'poimap-bookmark--update t))
     (remove-hook 'poimap-idle-update-functions #'poimap-bookmark--update)
     (remove-variable-watcher
      'bookmark-alist-modification-count
-     #'poimap-bookmark--bookmark-count-watcher)))
+     #'poimap-bookmark--bookmark-count-watcher)
+    (poimap--clear-buffer-state 'poimap-bookmark)))
 
 (provide 'poimap-bookmark)
 

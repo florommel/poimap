@@ -56,12 +56,12 @@ The foreground color is used."
   :type 'number
   :group 'poimap)
 
-(defcustom poimap-diff-hl-height 6
+(defcustom poimap-diff-hl-height 4
   "Size passed to `poimap-diff-hl-delete-shape-function'."
   :type '(choice number (cons number number))
   :group 'poimap)
 
-(defcustom poimap-diff-hl-delete-width 4
+(defcustom poimap-diff-hl-delete-width 3
   "Size passed to `poimap-diff-hl-delete-shape-function'."
   :type '(choice number (cons number number))
   :group 'poimap)
@@ -108,10 +108,13 @@ The foreground color is used."
   :group 'poimap
   (if poimap-diff-hl
       (progn
+        (poimap--warn-unless-mode 'poimap-diff-hl)
         (add-hook 'poimap-idle-update-functions #'poimap-diff-hl--update)
-        (advice-add #'diff-hl-update :after #'poimap-diff-hl--update-advice))
+        (advice-add #'diff-hl-update :after #'poimap-diff-hl--update-advice)
+        (poimap--for-all-visible-window-buffers #'poimap-diff-hl--update t))
     (remove-hook 'poimap-idle-update-functions #'poimap-diff-hl--update)
-    (advice-remove #'diff-hl-update #'poimap-diff-hl--update-advice)))
+    (advice-remove #'diff-hl-update #'poimap-diff-hl--update-advice)
+    (poimap--clear-buffer-state 'poimap-diff-hl)))
 
 (provide 'poimap-diff-hl)
 

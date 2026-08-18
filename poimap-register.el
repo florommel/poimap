@@ -42,12 +42,12 @@ The foreground color is used."
   :type 'function
   :group 'poimap)
 
-(defcustom poimap-register-vertical-position 0.37
+(defcustom poimap-register-vertical-position 0.6
   "Vertical position of register POIs."
   :type 'number
   :group 'poimap)
 
-(defcustom poimap-register-size 12
+(defcustom poimap-register-size 7
   "Size passed to `poimap-register-shape-function'."
   :type '(choice number (cons number number))
   :group 'poimap)
@@ -95,10 +95,13 @@ The foreground color is used."
   :group 'poimap
   (if poimap-register
       (progn
+        (poimap--warn-unless-mode 'poimap-register)
         (add-hook 'poimap-idle-update-functions #'poimap-register--update)
-        (advice-add #'set-register :after #'poimap-register--advice))
+        (advice-add #'set-register :after #'poimap-register--advice)
+        (poimap--for-all-visible-window-buffers #'poimap-register--update t))
     (remove-hook 'poimap-idle-update-functions #'poimap-register--update)
-    (advice-remove #'set-register #'poimap-register--advice)))
+    (advice-remove #'set-register #'poimap-register--advice)
+    (poimap--clear-buffer-state 'poimap-register)))
 
 (provide 'poimap-register)
 

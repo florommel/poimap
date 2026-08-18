@@ -57,12 +57,12 @@ The foreground color is used."
   :type 'function
   :group 'poimap)
 
-(defcustom poimap-flymake-vertical-position 0.37
+(defcustom poimap-flymake-vertical-position 0.6
   "Vertical position of Flymake diagnostic POIs."
   :type 'number
   :group 'poimap)
 
-(defcustom poimap-flymake-size (cons 8 8)
+(defcustom poimap-flymake-size (cons 5 5)
   "Size passed to `poimap-flymake-shape-function'."
   :type '(choice number (cons number number))
   :group 'poimap)
@@ -132,10 +132,14 @@ The foreground color is used."
   :group 'poimap
   (if poimap-flymake
       (progn
+        (poimap--warn-unless-mode 'poimap-flymake)
         (advice-add 'flymake--handle-report :after #'poimap-flymake--refresh)
-        (add-hook 'poimap-idle-update-functions #'poimap-flymake--update))
+        (add-hook 'poimap-idle-update-functions #'poimap-flymake--update)
+        (poimap--for-all-visible-window-buffers #'poimap-flymake--update t))
     (advice-remove 'flymake--handle-report #'poimap-flymake--refresh)
-    (remove-hook 'poimap-idle-update-functions #'poimap-flymake--update)))
+    (remove-hook 'poimap-idle-update-functions #'poimap-flymake--update)
+    (poimap--clear-buffer-state
+     'poimap-flymake 'poimap-flymake--idle-timer)))
 
 (provide 'poimap-flymake)
 

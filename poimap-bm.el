@@ -42,12 +42,12 @@ The foreground color is used."
   :type 'function
   :group 'poimap)
 
-(defcustom poimap-bm-vertical-position 0.37
+(defcustom poimap-bm-vertical-position 0.6
   "Vertical position of bm POIs."
   :type 'number
   :group 'poimap)
 
-(defcustom poimap-bm-size 12
+(defcustom poimap-bm-size 7
   "Size passed to `poimap-bm-shape-function'."
   :type '(choice number (cons number number))
   :group 'poimap)
@@ -79,12 +79,15 @@ The foreground color is used."
   :group 'poimap
   (if poimap-bm
       (progn
+        (poimap--warn-unless-mode 'poimap-bm)
         (add-hook 'poimap-idle-update-functions #'poimap-bm--update)
         (advice-add #'bm-bookmark-add :after #'poimap-bm--update-advice)
-        (advice-add #'bm-bookmark-remove :after #'poimap-bm--update-advice))
+        (advice-add #'bm-bookmark-remove :after #'poimap-bm--update-advice)
+        (poimap--for-all-visible-window-buffers #'poimap-bm--update t))
     (remove-hook 'poimap-idle-update-functions #'poimap-bm--update)
     (advice-remove #'bm-bookmark-add #'poimap-bm--update-advice)
-    (advice-remove #'bm-bookmark-remove #'poimap-bm--update-advice)))
+    (advice-remove #'bm-bookmark-remove #'poimap-bm--update-advice)
+    (poimap--clear-buffer-state 'poimap-bm)))
 
 (provide 'poimap-bm)
 

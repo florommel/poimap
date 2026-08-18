@@ -43,12 +43,12 @@ The foreground color is used."
   :type 'function
   :group 'poimap)
 
-(defcustom poimap-swiper-vertical-position 0.65
+(defcustom poimap-swiper-vertical-position 0.6
   "Vertical position of Swiper POIs."
   :type '(choice number (cons number number))
   :group 'poimap)
 
-(defcustom poimap-swiper-size 6
+(defcustom poimap-swiper-size 3
   "Size passed to `poimap-swiper-shape-function'."
   :type 'number
   :group 'poimap)
@@ -98,8 +98,12 @@ The foreground color is used."
   :global t
   :group 'poimap
   (if poimap-swiper
-      (add-hook 'poimap-idle-update-functions #'poimap-swiper--update)
-    (remove-hook 'poimap-idle-update-functions #'poimap-swiper--update)))
+      (progn
+        (poimap--warn-unless-mode 'poimap-swiper)
+        (add-hook 'poimap-idle-update-functions #'poimap-swiper--update)
+        (poimap--for-all-visible-window-buffers #'poimap-swiper--update t))
+    (remove-hook 'poimap-idle-update-functions #'poimap-swiper--update)
+    (poimap--clear-buffer-state 'poimap-swiper)))
 
 (provide 'poimap-swiper)
 

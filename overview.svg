@@ -1,0 +1,60 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:svg="http://www.w3.org/2000/svg" width="600.000" height="200.000" version="1.1" id="svg1">
+  <defs id="defs1">
+    <marker style="overflow:visible" id="ArrowWide" refX="0.000" refY="0.000" orient="auto-start-reverse" markerWidth="1.000" markerHeight="1.000" viewBox="0.000 0.000 1.000 1.000" preserveAspectRatio="xMidYMid">
+      <path style="fill:none;stroke:context-stroke;stroke-width:1.000;stroke-linecap:butt" d="M 3,-3 0,0 3,3" transform="rotate(180.000,0.125,0.000)" id="path1"/>
+    </marker>
+  </defs>
+  <g id="g1" shape-rendering="crispEdges">
+    <rect id="rect56" width="600.000" height="200.000" x="0.000" y="0.000" fill="#3d4a74ff"/>
+    <rect x="39.000" y="79.000" width="527.000" height="42.000" fill="#222327ff" id="rect2-7"/>
+    <rect x="40.000" y="80.000" width="525.000" height="40.000" fill="#2e354aff" id="rect2"/>
+    <rect x="188.000" y="80.000" width="149.000" height="40.000" fill="#475578ff" id="rect3"/>
+    <circle r="2.500" fill="currentColor" shape-rendering="auto" id="circle32" cx="246.562" cy="106.000" style="color:#aac4de;stroke-width:2.500"/>
+    <circle r="2.500" fill="currentColor" shape-rendering="auto" id="circle33" cx="294.757" cy="106.000" style="color:#aac4de;stroke-width:2.500"/>
+    <circle r="2.500" fill="currentColor" shape-rendering="auto" id="circle34" cx="318.932" cy="106.000" style="color:#aac4de;stroke-width:2.500"/>
+    <circle r="2.500" fill="currentColor" shape-rendering="auto" id="circle35" cx="322.396" cy="106.000" style="color:#aac4de;stroke-width:2.500"/>
+    <circle r="2.500" fill="currentColor" shape-rendering="auto" id="circle36" cx="335.176" cy="106.000" style="color:#aac4de;stroke-width:2.500"/>
+    <circle r="2.500" fill="currentColor" shape-rendering="auto" id="circle37" cx="336.100" cy="106.000" style="color:#aac4de;stroke-width:2.500"/>
+    <rect x="131.849" y="80.000" width="2.000" height="7.000" fill="#b49ce2" id="rect8" style="stroke-width:1.000"/>
+    <rect x="144.860" y="80.000" width="2.000" height="7.000" fill="#e7cc99" id="rect9" style="stroke-width:1.000"/>
+    <rect x="156.331" y="80.000" width="2.000" height="7.000" fill="#e7cc99" id="rect10" style="stroke-width:1.000"/>
+    <rect x="169.112" y="80.000" width="2.000" height="7.000" fill="#e7cc99" id="rect11" style="stroke-width:1.000"/>
+    <rect x="179.428" y="80.000" width="2.000" height="7.000" fill="#e7cc99" id="rect12" style="stroke-width:1.000"/>
+    <rect x="183.586" y="80.000" width="2.000" height="7.000" fill="#e7cc99" id="rect13" style="stroke-width:1.000"/>
+    <rect x="407.932" y="80.000" width="2.000" height="7.000" fill="#e7cc99" id="rect14" style="stroke-width:1.000"/>
+    <rect x="189.206" y="80.000" width="2.000" height="7.000" fill="#e59e8d" id="rect15" style="stroke-width:1.000"/>
+    <rect x="364.202" y="80.000" width="2.000" height="7.000" fill="#e59e8d" id="rect16" style="stroke-width:1.000"/>
+    <rect x="416.709" y="80.000" width="2.000" height="7.000" fill="#e59e8d" id="rect17" style="stroke-width:1.000"/>
+    <rect x="464.288" y="80.000" width="2.000" height="7.000" fill="#e59e8d" id="rect18" style="stroke-width:1.000"/>
+    <rect x="486.230" y="80.000" width="2.000" height="7.000" fill="#e59e8d" id="rect19" style="stroke-width:1.000"/>
+    <rect x="515.486" y="80.000" width="2.000" height="7.000" fill="#e59e8d" id="rect20" style="stroke-width:1.000"/>
+    <g id="use20" style="color:#b49ce2" transform="matrix(1.588,0.000,0.000,1.588,132.849,94.800)">
+      <path d="M 0 -3.780 3.780 0 0 3.780 -3.780 0 Z" shape-rendering="auto" fill="currentColor" id="path37"/>
+    </g>
+    <g id="use21" style="color:#b49ce2" transform="matrix(1.588,0.000,0.000,1.588,382.210,94.800)">
+      <path d="M 0 -3.780 3.780 0 0 3.780 -3.780 0 Z" shape-rendering="auto" fill="currentColor" id="path38" style="fill:#e7cc99;fill-opacity:1"/>
+    </g>
+    <rect x="365.202" y="114.000" width="43.730" height="6.000" fill="#9eca72" id="rect21" style="stroke-width:1.000"/>
+    <rect x="550.902" y="114.000" width="4.000" height="6.000" fill="#ee7777" id="rect22" style="stroke-width:1.000"/>
+    <line x1="246.794" y1="80.000" x2="246.794" y2="120.000" stroke="#d8d8d8" stroke-width="2.000" id="line22"/>
+  </g>
+  <text xml:space="preserve" style="font-size:24.000px;line-height:1.250;font-family:Sans;-inkscape-font-specification:Sans;font-variant-ligatures:none;text-align:center;letter-spacing:0.000px;word-spacing:0.000px;text-anchor:middle;stroke-width:1.000" x="60.627" y="37.094" id="text38"><tspan id="tspan38" style="font-size:24.000px;stroke-width:1.000" x="60.627" y="37.094"/></text>
+  <text xml:space="preserve" style="font-size:24.000px;line-height:1.250;font-family:Sans;-inkscape-font-specification:Sans;font-variant-ligatures:none;text-align:center;letter-spacing:0.000px;word-spacing:0.000px;text-anchor:middle;stroke-width:1.000" x="74.987" y="34.302" id="text39"><tspan id="tspan39" style="font-size:24.000px;stroke-width:1.000"/></text>
+  <text xml:space="preserve" style="font-size:21.333px;line-height:1.250;font-family:Sans;-inkscape-font-specification:Sans;font-variant-ligatures:none;text-align:center;letter-spacing:0.000px;word-spacing:0.000px;text-anchor:middle;fill:#ffffff;stroke-width:1.000" x="75.008" y="34.130" id="text40"><tspan id="tspan40" style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:21.333px;font-family:Monospace;-inkscape-font-specification:Monospace;fill:#ffffff;stroke-width:1.000" x="75.008" y="34.130">Imenu</tspan></text>
+  <text xml:space="preserve" style="font-size:21.333px;line-height:1.250;font-family:Sans;-inkscape-font-specification:Sans;font-variant-ligatures:none;text-align:center;letter-spacing:0.000px;word-spacing:0.000px;text-anchor:middle;fill:#ffffff;stroke-width:1.000" x="198.084" y="35.111" id="text41"><tspan id="tspan41" style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:21.333px;font-family:Monospace;-inkscape-font-specification:Monospace;fill:#ffffff;stroke-width:1.000" x="198.084" y="35.111">Point</tspan></text>
+  <text xml:space="preserve" style="font-size:21.333px;line-height:1.250;font-family:Sans;-inkscape-font-specification:Sans;font-variant-ligatures:none;text-align:start;letter-spacing:0.000px;word-spacing:0.000px;text-anchor:start;fill:#ffffff;stroke-width:1.000" x="254.294" y="35.111" id="text42"><tspan style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:21.333px;font-family:Monospace;-inkscape-font-specification:Monospace;fill:#ffffff;stroke-width:1.000" x="254.294" y="35.111" id="tspan48">Window</tspan></text>
+  <text xml:space="preserve" style="font-size:21.333px;line-height:1.250;font-family:Sans;-inkscape-font-specification:Sans;font-variant-ligatures:none;text-align:center;letter-spacing:0.000px;word-spacing:0.000px;text-anchor:middle;fill:#ffffff;stroke-width:1.000" x="477.952" y="159.942" id="text43"><tspan id="tspan43" style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:21.333px;font-family:Monospace;-inkscape-font-specification:Monospace;fill:#ffffff;stroke-width:1.000" x="477.952" y="159.942">Diff-HL</tspan></text>
+  <text xml:space="preserve" style="font-size:21.333px;line-height:1.250;font-family:Sans;-inkscape-font-specification:Sans;font-variant-ligatures:none;text-align:center;letter-spacing:0.000px;word-spacing:0.000px;text-anchor:middle;fill:#ffffff;stroke-width:1.000" x="452.424" y="35.111" id="text44"><tspan id="tspan44" style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:21.333px;font-family:Monospace;-inkscape-font-specification:Monospace;fill:#ffffff;stroke-width:1.000" x="452.424" y="35.111">Registers</tspan></text>
+  <text xml:space="preserve" style="font-size:21.333px;line-height:1.250;font-family:Sans;-inkscape-font-specification:Sans;font-variant-ligatures:none;text-align:center;letter-spacing:0.000px;word-spacing:0.000px;text-anchor:middle;fill:#ffffff;stroke-width:1.000" x="100.928" y="159.835" id="text45"><tspan id="tspan45" style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:21.333px;font-family:Monospace;-inkscape-font-specification:Monospace;fill:#ffffff;stroke-width:1.000" x="100.928" y="159.835">Bookmarks</tspan></text>
+  <text xml:space="preserve" style="font-size:21.333px;line-height:1.250;font-family:Sans;-inkscape-font-specification:Sans;font-variant-ligatures:none;text-align:start;letter-spacing:0.000px;word-spacing:0.000px;text-anchor:start;fill:#ffffff;stroke-width:1.000" x="195.127" y="159.835" id="text46"><tspan id="tspan46" style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:21.333px;font-family:Monospace;-inkscape-font-specification:Monospace;fill:#ffffff;stroke-width:1.000" x="195.127" y="159.835">Current-Symbol</tspan><tspan style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:21.333px;font-family:Monospace;-inkscape-font-specification:Monospace;fill:#ffffff;stroke-width:1.000" x="195.127" y="186.502" id="tspan47">Isearch</tspan></text>
+  <path style="fill:none;stroke:#ffffff;stroke-width:1.500;stroke-linecap:round;stroke-linejoin:miter;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#ArrowWide)" d="m 75.591 38.551 c 0 0 11.923 12.548 37.824 13.938 C 140.352 53.934 144.862 75.591 144.862 75.591" id="path48"/>
+  <path style="fill:none;stroke:#ffffff;stroke-width:1.500;stroke-linecap:round;stroke-linejoin:miter;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#ArrowWide)" d="m 198.425 38.551 c 0 0 3.670 15.457 21.549 16.617 C 243.968 56.724 246.909 75.591 246.909 75.591" id="path49"/>
+  <path style="fill:none;stroke:#ffffff;stroke-width:1.500;stroke-linecap:round;stroke-linejoin:miter;stroke-dasharray:1.500, 3.000;stroke-dashoffset:0.000;stroke-opacity:1" d="M 253.228 37.795 188.598 75.591" id="path50"/>
+  <path style="fill:none;stroke:#ffffff;stroke-width:1.500;stroke-linecap:round;stroke-linejoin:miter;stroke-dasharray:1.500, 3.000;stroke-dashoffset:0.000;stroke-opacity:1" d="m 330.709 37.795 5.291 37.795" id="path51"/>
+  <path style="fill:none;stroke:#ffffff;stroke-width:1.500;stroke-linecap:round;stroke-linejoin:miter;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#ArrowWide)" d="m 451.654 38.551 c 0 0 -9.213 14.550 -34.945 17.813 C 388.803 59.903 382.594 84.283 382.594 84.283" id="path52"/>
+  <path style="fill:none;stroke:#ffffff;stroke-width:1.500;stroke-linecap:round;stroke-linejoin:miter;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#ArrowWide)" d="m 94.488 138.608 c 0 0 3.456 -13.752 19.984 -13.867 17.249 -0.120 18.295 -19.393 18.295 -19.393" id="path53"/>
+  <path style="fill:none;stroke:#ffffff;stroke-width:1.500;stroke-linecap:round;stroke-linejoin:miter;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#ArrowWide)" d="m 260.787 138.608 c 0 0 3.976 -10.017 17.685 -10.624 C 292.565 127.361 294.153 112.528 294.153 112.528" id="path54"/>
+  <path style="fill:none;stroke:#ffffff;stroke-width:1.500;stroke-linecap:round;stroke-linejoin:miter;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#ArrowWide)" d="m 491.339 138.608 c 0 0 22.887 -12.680 42.315 -5.638 16.492 5.978 18.263 -8.726 18.263 -8.726" id="path55"/>
+  <path style="fill:none;stroke:#ffffff;stroke-width:1.500;stroke-linecap:round;stroke-linejoin:miter;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#ArrowWide)" d="m 449.904 138.608 c 0 0 -22.887 -12.680 -42.315 -5.638 -16.492 5.978 -18.263 -8.726 -18.263 -8.726" id="path56"/>
+</svg>

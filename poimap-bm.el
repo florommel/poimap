@@ -4,9 +4,11 @@
 
 ;; Author: Florian Rommel <mail@florommel.de>
 ;; Maintainer: Florian Rommel <mail@florommel.de>
-;; Url: https://github.com/florommel/poimap
+;; URL: https://github.com/florommel/poimap
 ;; Created: 2026-06-25
-;; Package-Requires: ((emacs "29.1") (poimap "0.1") (bm "0"))
+;; Version: 0.1
+;; Package-Requires: ((emacs "29.1") (poimap "0.1") (bm "1.0"))
+;; Keywords: convenience, bookmark
 
 ;; This program is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -53,7 +55,7 @@ The foreground color is used."
   :group 'poimap)
 
 (defun poimap-bm--update (force)
-  "Update bm bookmark POIs when FORCE is non-nil."
+  "Update bm bookmark POIs if FORCE is non-nil."
   (when force
     (let ((shape-fn poimap-bm-shape-function)
           (vert poimap-bm-vertical-position)
@@ -69,6 +71,7 @@ The foreground color is used."
        (mapconcat #'identity (mapcan #'identity (nreverse svg)))))))
 
 (defun poimap-bm--update-advice (&rest _args)
+  "Advice function for bm-bookmark-add/remove."
   (poimap-bm--update t)
   (force-mode-line-update))
 

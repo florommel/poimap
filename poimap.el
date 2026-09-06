@@ -1,10 +1,10 @@
-;;; poimap --- Visual buffer map with points of interest -*- lexical-binding: t; -*-
+;;; poimap.el --- Visual buffer map with points of interest -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2026 Florian Rommel
 
 ;; Author: Florian Rommel <mail@florommel.de>
 ;; Maintainer: Florian Rommel <mail@florommel.de>
-;; Url: https://github.com/florommel/poimap
+;; URL: https://github.com/florommel/poimap
 ;; Created: 2026-06-25
 ;; Version: 0.1
 ;; Package-Requires: ((emacs "29.1"))
@@ -25,10 +25,13 @@
 
 ;;; Commentary:
 
-;; Poimap provides a visual (SVG-based) buffer map for your mode line.
-;; It shows a compact overview of the buffer, highlighting the
-;; currently visible portion in the window, the point position, and
-;; configurable points or regions of interest (POIs).
+;; Poimap is a visual (SVG-based) buffer map for the Emacs mode line.
+;; In addition to standard scroll-bar-like features (showing the
+;; currently visible portion of the buffer and the position of the
+;; point), Poimap displays configurable points or regions of interest
+;; (POIs) as colored marks/symbols (similar to a video-game minimap),
+;; providing an immediate overview of not only your position but also
+;; the buffer's topology.
 
 ;;; Code:
 
@@ -114,7 +117,7 @@ Its foreground is used for the point marker."
   :group 'poimap)
 
 (defcustom poimap-width 0.3
-  "The width of the poimap bar"
+  "The width of the poimap bar."
   :type '(choice
           (integer :tag "Fixed pixel size")
           (float :tag "Relative window size")
@@ -122,7 +125,7 @@ Its foreground is used for the point marker."
   :group 'poimap)
 
 (defcustom poimap-height 1.0
-  "The height of the poimap bar"
+  "The height of the poimap bar."
   :type '(choice
           (integer :tag "Fixed pixel size")
           (float :tag "Relative line height")
@@ -130,14 +133,14 @@ Its foreground is used for the point marker."
   :group 'poimap)
 
 (defcustom poimap-align-right t
-  "Align the poimap bar to the right"
+  "Align the poimap bar to the right."
   :type '(choice
           (const :tag "Do not align" nil)
           (const :tag "Align to the right" t))
   :group 'poimap)
 
 (defcustom poimap-use-face t
-  "Use `poimap-face' and `poimap-inactive-face' as poimap's base face"
+  "Use `poimap-face' and `poimap-inactive-face' as poimap's base face."
   :type '(choice
           (const :tag "Don't use a face" nil)
           (const :tag "Use the poimap faces" t))
@@ -159,12 +162,12 @@ Set this to nil when your mode-line configuration evaluates
   "Non-nil when the global poimap mode is enabled.")
 
 (defcustom poimap-border-width 1
-  "Border width of the poimap rectangle"
+  "Border width of the poimap rectangle."
   :type 'number
   :group 'poimap)
 
 (defcustom poimap-point-width 2
-  "Width of the point marker"
+  "Width of the point marker."
   :type 'number
   :group 'poimap)
 
@@ -174,7 +177,7 @@ Set this to nil when your mode-line configuration evaluates
   :group 'poimap)
 
 (defcustom poimap-min-range-size 0.004
-  "Minimal range size in percent of the bar"
+  "Minimal range size in percent of the bar."
   :type 'number
   :group 'poimap)
 
@@ -228,7 +231,7 @@ decide not to recalculate its POIs and rely on other update hooks."
 
 (defmacro poimap--svg-template (name tag attrs)
   "Define NAME as a simple SVG element list builder macro.
-
+TAG is the element's tag and ATTRS are the attributes.
 The generated macro returns a list of string components.
 
 Examples
@@ -302,7 +305,8 @@ Static string and number values are directly inserted."
          :xmlns:xlink "http://www.w3.org/1999/xlink"))
 
 (defmacro poimap--svg-root-open (width height)
-  "Opening root SVG tag."
+  "Opening root SVG tag.
+WIDTH and HEIGHT are the dimensions of the SVG."
   `(list "<svg width=\"" ,width
          "\" height=\"" ,height
          "\" shape-rendering=\"crispEdges\""
@@ -315,7 +319,9 @@ Static string and number values are directly inserted."
   '(list "</svg>"))
 
 (defmacro poimap--svg-inner-open (x y width height)
-  "Opening inner SVG tag."
+  "Opening inner SVG tag.
+X and Y are the position of the inner SVG.
+WIDTH and HEIGHT are its dimensions."
   `(list "<svg x=\"" ,x
          "\" y=\"" ,y
          "\" width=\"" ,width
@@ -378,24 +384,25 @@ Static string and number values are directly inserted."
  (:x str :y str :width str :height str :color str :href "#xcross"))
 
 (defun poimap-emacs-to-svg-color (color &optional alpha)
-  "Convert Emacs COLOR to SVG-compatible #rrggbb."
+  "Convert Emacs COLOR to SVG-compatible #rrggbb.
+The optional parameter ALPHA is a float transparency value (0-1)."
   (if-let ((rgb (color-values color)))
       (if alpha
           (format "#%02x%02x%02x%02x"
-                  (lsh (nth 0 rgb) -8)
-                  (lsh (nth 1 rgb) -8)
-                  (lsh (nth 2 rgb) -8)
+                  (ash (nth 0 rgb) -8)
+                  (ash (nth 1 rgb) -8)
+                  (ash (nth 2 rgb) -8)
                   (round (* alpha 255)))
         (format "#%02x%02x%02x"
-                (lsh (nth 0 rgb) -8)
-                (lsh (nth 1 rgb) -8)
-                (lsh (nth 2 rgb) -8)))
+                (ash (nth 0 rgb) -8)
+                (ash (nth 1 rgb) -8)
+                (ash (nth 2 rgb) -8)))
     (if alpha
         (format "#808080%02x" (round (* alpha 255)))
       "#808080")))
 
 (defun poimap-svg-ytranslate (height vert)
-  "Get the vertical translate based on HEIGHT"
+  "Get the vertical translate based on HEIGHT and VERT."
   (concat "translate(0 "
           (cond
            ((eq vert 'top) "0")
@@ -404,7 +411,7 @@ Static string and number values are directly inserted."
           ")"))
 
 (defun poimap-svg-xytranslate (width height vert)
-  "Get the horizontal and vertical translate based on WIDTH and HEIGHT"
+  "Get the horizontal and vertical translate based on WIDTH, HEIGHT and VERT."
   (concat "translate("
           (number-to-string (/ width -2.0))
           " "
@@ -419,7 +426,7 @@ Static string and number values are directly inserted."
 
 POS is the relative horizontal position returned by `poimap-map-position'.
 SIZE is the absolute size, specified as either a number or a cons cell
-(WIDTH . HEIGHT).  VERT specifies the vertical position: a number between
+\(WIDTH . HEIGHT).  VERT specifies the vertical position: a number between
 0 and 1.  COLOR specifies the color."
   (let* ((width  (if (consp size) (car size) size))
          (height (if (consp size) (cdr size) size)))
@@ -434,7 +441,7 @@ SIZE is the absolute size, specified as either a number or a cons cell
 
 POS is the relative horizontal position returned by `poimap-map-position'.
 SIZE is the absolute size, specified as either a number or a cons cell
-(WIDTH . HEIGHT).  VERT specifies the vertical position: a number between
+\(WIDTH . HEIGHT).  VERT specifies the vertical position: a number between
 0 and 1.  COLOR specifies the color."
   (let* ((width  (if (consp size) (car size) size))
          (height (if (consp size) (cdr size) size)))
@@ -449,7 +456,7 @@ SIZE is the absolute size, specified as either a number or a cons cell
 
 POS is the relative horizontal position returned by `poimap-map-position'.
 SIZE is the absolute size, specified as either a number or a cons cell
-(WIDTH . HEIGHT).  VERT specifies the vertical position: a number between
+\(WIDTH . HEIGHT).  VERT specifies the vertical position: a number between
 0 and 1.  COLOR specifies the color."
   (let* ((width  (if (consp size) (car size) size))
          (height (if (consp size) (cdr size) size)))
@@ -464,7 +471,7 @@ SIZE is the absolute size, specified as either a number or a cons cell
 
 POS is the relative horizontal position returned by `poimap-map-position'.
 SIZE is the absolute size, specified as either a number or a cons cell
-(WIDTH . HEIGHT).  VERT specifies the vertical position: a number between
+\(WIDTH . HEIGHT).  VERT specifies the vertical position: a number between
 0 and 1, or the symbol \\='top or \\='bottom to align the tick with the
 corresponding edge without overlap.  COLOR specifies the color."
   (let* ((width  (if (consp size) (car size) size))
@@ -485,7 +492,7 @@ corresponding edge without overlap.  COLOR specifies the color."
 POS is the horizontal positions and range as a cons cell (FROM . TO).
 SIZE is the absolute size, specified as either a number.  VERT specifies the
 vertical position: a number between 0 and 1, or the symbol \\='top or \\='bottom
-to align the range with the corresponding edge without overlap. COLOR specifies
+to align the range with the corresponding edge without overlap.  COLOR specifies
 the color."
   (let* ((x1 (car pos))
          (x2 (cdr pos))
@@ -504,16 +511,16 @@ the color."
 (defvar-local poimap--idle-update-timer nil
   "Pending idle timer for `poimap--run-idle-update'.")
 (defvar-local poimap--idle-update-foce nil
-  "Whether to force update functions in next idle update")
+  "Whether to force update functions in next idle update.")
 (defvar-local poimap--last-update-window nil
-  "The last window that triggered an idle POI update in this buffer")
+  "The last window that triggered an idle POI update in this buffer.")
 
 ;; A major-mode change resets ordinary buffer-local variables. Keep them.
 (put 'poimap--idle-update-timer 'permanent-local t)
 (put 'poimap--idle-update-foce 'permanent-local t)
 
 (defun poimap-last-update-window ()
-  "Get the window that triggered an idle POI update in the current buffer"
+  "Get the window that triggered an idle POI update in the current buffer."
   poimap--last-update-window)
 
 (defun poimap-update-pois (category pois)
@@ -597,6 +604,8 @@ if necessary.  Return nil when POS starts outside the buffer."
 
 (defun poimap--request-idle-update (&optional force window)
   "Arrange for an idle POI update for the current buffer.
+
+FORCE requests a mandatory update for all POI handlers.
 WINDOW is set as `poimap--last-update-window' if not nil."
   (when force
     (setq poimap--idle-update-foce t))
@@ -608,7 +617,7 @@ WINDOW is set as `poimap--last-update-window' if not nil."
            0.1 nil
            #'poimap--run-idle-update (current-buffer)))))
 
-(defun poimap--request-idle-update-for-command (&rest args)
+(defun poimap--request-idle-update-for-command (&rest _args)
   "Request an idle update for the command's effective buffer."
   (let* ((window (if (minibufferp)
                      (minibuffer-selected-window)
@@ -617,25 +626,26 @@ WINDOW is set as `poimap--last-update-window' if not nil."
     (with-current-buffer buffer
       (poimap--request-idle-update nil window))))
 
-(defun poimap--request-idle-update-for-buffer-text-change (&rest args)
+(defun poimap--request-idle-update-for-buffer-text-change (&rest _args)
   "Request an update for a buffer text change.
 This requests a normal (\"unforced\") idle update of POIs. This means POIs that
 react on update without the force parameter set are refreshed."
   (poimap--request-idle-update t))
 
 (defun poimap--request-idle-update-for-window-buffer-change (frame)
-  "Request an update for a window buffer change.
+  "Request an update for a window buffer change for FRAME.
 We may have a new buffer or a buffer that hasn't been displayed for a long time;
 so request a force (i.e., complete) update of all POIs.  This is fine since this
 doesn't happen too often."
   (dolist (window (window-list frame 'no-minibuffer))
     (unless (eq (window-old-buffer window)
                 (window-buffer window))
+      (set-window-parameter window 'poimap-cache nil)
       (with-current-buffer (window-buffer window)
         (poimap--request-idle-update t window)))))
 
 (defun poimap--request-idle-update-for-window-selection-change (frame)
-  "Request an update for a window selection change.
+  "Request an update for a window selection change for FRAME.
 This requests a normal (\"unforced\") idle update of POIs."
   (dolist (window (window-list frame 'no-minibuf))
     ;; We cannot filter the windows that actually changed, specifically not
@@ -657,7 +667,7 @@ This requests a normal (\"unforced\") idle update of POIs."
   (poimap--update-all-visible-windows))
 
 (defun poimap--for-all-visible-window-buffers (fn &rest args)
-  "Apply a poimap function for all visible window buffers."
+  "Apply the poimap function FN for all visible window buffers with ARGS."
   (dolist (frame (visible-frame-list))
     (dolist (window (window-list frame 'no-minibuf))
       (set-window-parameter window 'poimap-cache nil)
@@ -666,7 +676,9 @@ This requests a normal (\"unforced\") idle update of POIs."
   (force-mode-line-update t))
 
 (defun poimap--svg (window width height active)
-  "Return an SVG object showing WINDOW's visible range in the current buffer."
+  "Return an SVG object showing WINDOW's visible range in the current buffer.
+WIDTH and HEIGHT are the dimanensions of the map.  ACTIVE draws an active-
+colored map if non-nil."
   ;; To keep scrolling responsive, we only update every 0.02 seconds max if
   ;; input is already pending.
   (if-let (cache (and (input-pending-p)
@@ -690,7 +702,6 @@ This requests a normal (\"unforced\") idle update of POIs."
            (visible-start (poimap--clamp (window-start window) min-pos max-pos))
            (visible-end (poimap--clamp (window-end window) min-pos max-pos))
            (point-pos (poimap--clamp (point) min-pos max-pos))
-           (visible-width (- visible-end visible-start))
            (bg-color (poimap-emacs-to-svg-color
                       (face-background (if active 'poimap-background-face
                                          'poimap-background-inactive-face)
@@ -731,11 +742,11 @@ This requests a normal (\"unforced\") idle update of POIs."
                ;; Visible window rectangle.
                (let ((vstart (poimap--factor visible-start min-pos max-pos))
                      (vend   (poimap--factor visible-end   min-pos max-pos)))
-                (poimap--svg-rect (poimap--percent vstart)
-                                 "0"
-                                 (poimap--percent (- vend vstart))
-                                 (number-to-string content-height)
-                                 wn-color))
+                 (poimap--svg-rect (poimap--percent vstart)
+                                   "0"
+                                   (poimap--percent (- vend vstart))
+                                   (number-to-string content-height)
+                                   wn-color))
                ;; Points of interest.
                (mapcar #'cdr poimap--pois)
                ;; Point marker.
@@ -749,7 +760,9 @@ This requests a normal (\"unforced\") idle update of POIs."
                (poimap--svg-root-close)))))))
 
 (defun poimap-string (&optional window width height)
-  "Return a display string containing the projection image for WINDOW."
+  "Return a display string containing the projection image for WINDOW.
+WIDTH and HEIGHT specify the dimensions if non-nil, otherwise `poimap-width' and
+`poimap-height' are used."
   (if-let (window (poimap--live-window window))
       (let* ((active (mode-line-window-selected-p))
              (bar-width (or width
@@ -788,7 +801,7 @@ This requests a normal (\"unforced\") idle update of POIs."
              (propertize " " 'display (list
                                        'space
                                        :align-to `(- (+ right right-margin)
-                                                     (,(1+ bar-width)))))  ;; FIXME 1+ -> border
+                                                     (,(1+ bar-width)))))
              bar)
           bar))))
 

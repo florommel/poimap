@@ -4,9 +4,11 @@
 
 ;; Author: Florian Rommel <mail@florommel.de>
 ;; Maintainer: Florian Rommel <mail@florommel.de>
-;; Url: https://github.com/florommel/poimap
+;; URL: https://github.com/florommel/poimap
 ;; Created: 2026-06-25
+;; Version: 0.1
 ;; Package-Requires: ((emacs "29.1") (poimap "0.1"))
+;; Keywords: convenience
 
 ;; This program is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -53,7 +55,7 @@ The foreground color is used."
   :group 'poimap)
 
 (defun poimap-register--update (force)
-  "Update register POIs when FORCE is non-nil."
+  "Update register POIs if FORCE is non-nil."
   (when force
     (let ((shape-fn poimap-register-shape-function)
           (vert poimap-register-vertical-position)
@@ -80,6 +82,7 @@ The foreground color is used."
        (mapconcat #'identity (mapcan #'identity (nreverse svg)))))))
 
 (defun poimap-register--advice (&rest _args)
+  "Advice function for `set-register'."
   (let ((buffers (delete-dups
                   (mapcar #'window-buffer
                           (window-list-1 nil 'no-minibuffer t)))))

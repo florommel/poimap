@@ -4,9 +4,11 @@
 
 ;; Author: Florian Rommel <mail@florommel.de>
 ;; Maintainer: Florian Rommel <mail@florommel.de>
-;; Url: https://github.com/florommel/poimap
+;; URL: https://github.com/florommel/poimap
 ;; Created: 2026-06-25
+;; Version: 0.1
 ;; Package-Requires: ((emacs "29.1") (poimap "0.1"))
+;; Keywords: convenience, bookmark
 
 ;; This program is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -54,7 +56,7 @@ The foreground color is used."
   :group 'poimap)
 
 (defun poimap-bookmark--update (force)
-  "Return SVG for bookmarks."
+  "Update SVG for bookmarks if FORCE is non-nil."
   (poimap-update-pois
    'poimap-bookmark
    (when force
@@ -67,10 +69,10 @@ The foreground color is used."
            (bms (when file
                   (seq-filter
                    (lambda (bookmark)
-                     (let ((bookmark-file
+                     (let ((bookmark-filename
                             (bookmark-get-filename bookmark)))
-                       (and bookmark-file
-                            (file-equal-p file bookmark-file))))
+                       (and bookmark-filename
+                            (file-equal-p file bookmark-filename))))
                    bookmark-alist)))
            (bps (mapcar #'bookmark-get-position bms))
            (svg))

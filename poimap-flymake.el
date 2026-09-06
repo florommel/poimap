@@ -4,7 +4,7 @@
 
 ;; Author: Florian Rommel <mail@florommel.de>
 ;; Maintainer: Florian Rommel <mail@florommel.de>
-;; Url: https://github.com/florommel/poimap
+;; URL: https://github.com/florommel/poimap
 ;; Created: 2026-08-04
 ;; Version: 0.1
 ;; Package-Requires: ((emacs "29.1") (poimap "0.1"))
@@ -68,13 +68,13 @@ The foreground color is used."
   :group 'poimap)
 
 (defcustom poimap-flymake-include-filter '("error")
-  "If non-nil only include certain categories
-(a combination of \"error\", \"warning\", \"note\")."
+  "If non-nil only include certain categories.
+A combination of \"error\", \"warning\", \"note\"."
   :type '(repeat string)
   :group 'poimap)
 
 (defun poimap-flymake--category-face (category)
-  "Return the poimap face corresponding to Flymake diagnostic category."
+  "Return the poimap face corresponding to Flymake diagnostic CATEGORY."
   (cond
    ((string= category "error") 'poimap-flymake-error-face)
    ((string= category "warning") 'poimap-flymake-warning-face)
@@ -82,7 +82,7 @@ The foreground color is used."
    (t 'poimap-flymake-default-face)))
 
 (defun poimap-flymake--update (force)
-  "Update flymake POIs when FORCE is non-nil."
+  "Update flymake POIs if FORCE is non-nil."
   (when force
     (let ((shape-fn poimap-flymake-shape-function)
           (vert poimap-flymake-vertical-position)

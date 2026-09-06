@@ -4,9 +4,11 @@
 
 ;; Author: Florian Rommel <mail@florommel.de>
 ;; Maintainer: Florian Rommel <mail@florommel.de>
-;; Url: https://github.com/florommel/poimap
+;; URL: https://github.com/florommel/poimap
 ;; Created: 2026-06-25
+;; Version: 0.1
 ;; Package-Requires: ((emacs "29.1") (poimap "0.1"))
+;; Keywords: convenience, tools
 
 ;; This program is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -91,13 +93,13 @@ The foreground color is used."
   :group 'poimap)
 
 (defcustom poimap-imenu-rescan-idle-interval 1.0
-  "Idle interval at which the imenu for visible buffers that have changed
-is recalculated."
+  "Recalculation interval for changed visible buffers."
   :type 'number
   :group 'poimap)
 
 (defun poimap-imenu--update (force &optional rescan)
-  "Update imenu POIs when FORCE is non-nil."
+  "Update imenu POIs if FORCE is non-nil.
+Rescan Imenu if RESCAN is non-nil."
   (when force
     (let ((svg)
           (shape-fn poimap-imenu-shape-function)
@@ -198,6 +200,7 @@ is recalculated."
 
 (defun poimap-imenu--create-index-function-watcher
     (_symbol _new-value _operation where)
+  "Wacher for `imenu-create-index-function'."
   (if (bufferp where)
       (setq poimap-imenu--rescan t)
     (setq poimap-imenu--rescan 'global)))

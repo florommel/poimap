@@ -4,9 +4,11 @@
 
 ;; Author: Florian Rommel <mail@florommel.de>
 ;; Maintainer: Florian Rommel <mail@florommel.de>
-;; Url: https://github.com/florommel/poimap
+;; URL: https://github.com/florommel/poimap
 ;; Created: 2026-06-25
-;; Package-Requires: ((emacs "29.1") (poimap "0.1") (diff-hl "0"))
+;; Version: 0.1
+;; Package-Requires: ((emacs "29.1") (poimap "0.1") (diff-hl "1.9.0"))
+;; Keywords: convenience, vc
 
 ;; This program is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -67,7 +69,7 @@ The foreground color is used."
   :group 'poimap)
 
 (defun poimap-diff-hl--update (force)
-  "Update diff-hl POIs when FORCE is non-nil."
+  "Update diff-hl POIs if FORCE is non-nil."
   (when force
     (let ((color-insert (poimap-emacs-to-svg-color
                          (face-foreground 'poimap-diff-hl-insert nil 'default)))
@@ -98,6 +100,7 @@ The foreground color is used."
        (mapconcat #'identity (mapcan #'identity (nreverse svg)))))))
 
 (defun poimap-diff-hl--update-advice (&rest _args)
+  "Advice function for `diff-hl-update'."
   (poimap-diff-hl--update t)
   (force-mode-line-update))
 

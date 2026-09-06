@@ -4,9 +4,11 @@
 
 ;; Author: Florian Rommel <mail@florommel.de>
 ;; Maintainer: Florian Rommel <mail@florommel.de>
-;; Url: https://github.com/florommel/poimap
+;; URL: https://github.com/florommel/poimap
 ;; Created: 2026-06-25
-;; Package-Requires: ((emacs "29.1") (poimap "0.1") (swiper "0"))
+;; Version: 0.1
+;; Package-Requires: ((emacs "29.1") (poimap "0.1") (swiper "0.15.1"))
+;; Keywords: convenience, matching
 
 ;; This program is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -55,7 +57,7 @@ The foreground color is used."
 
 ;; FIXME: Leaks into other buffer if changed with an active session
 (defun poimap-swiper--update (_force)
-  "Update current swiper match POIs"
+  "Update current swiper match POIs."
   (poimap-update-pois
    'poimap-swiper
    (if (and (buffer-local-value 'ivy--minibuffer

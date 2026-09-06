@@ -4,9 +4,11 @@
 
 ;; Author: Florian Rommel <mail@florommel.de>
 ;; Maintainer: Florian Rommel <mail@florommel.de>
-;; Url: https://github.com/florommel/poimap
+;; URL: https://github.com/florommel/poimap
 ;; Created: 2026-06-25
+;; Version: 0.1
 ;; Package-Requires: ((emacs "29.1") (poimap "0.1"))
+;; Keywords: convenience, matching
 
 ;; This program is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -59,7 +61,7 @@ The foreground color is used."
   "Last current symbol.")
 
 (defun poimap-current-symbol--update (force)
-  "Update POIs for occurrences of the symbol at point when FORCE is non-nil.
+  "Update POIs for occurrences of the symbol at point if FORCE is non-nil.
 Return t when the POIs were updated, and nil otherwise."
   (when force
     (if-let ((bounds (and (not poimap-current-symbol--inhibitors)

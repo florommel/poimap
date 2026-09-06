@@ -190,9 +190,9 @@ Rescan Imenu if RESCAN is non-nil."
           (with-current-buffer buffer
             (let* ((current-tick (buffer-chars-modified-tick))
                    (previous-tick
-                    (gethash buffer poimap-imenu--refresh-ticks current-tick)))
+                    (gethash buffer poimap-imenu--refresh-ticks)))
               (when (or poimap-imenu--rescan
-                        (/= current-tick previous-tick))
+                        (not (eql current-tick previous-tick)))
                 (poimap-imenu--update t t)
                 (puthash buffer current-tick poimap-imenu--refresh-ticks)
                 (force-mode-line-update))))))

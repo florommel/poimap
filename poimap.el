@@ -788,7 +788,7 @@ WIDTH and HEIGHT specify the dimensions if non-nil, otherwise `poimap-width' and
                                              (poimap--svg window bar-width
                                                           bar-height active)
                                              :ascent 'center :scale 1)
-                              'help-echo (lambda (&rest _) nil) ;;"mouse-1: Go to position / drag to scroll"
+                              'help-echo "mouse-1: Go to position / drag to scroll"
                               'local-map '(keymap
                                            (mode-line
                                             keymap (down-mouse-1 . poimap-mouse)))

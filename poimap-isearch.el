@@ -175,14 +175,6 @@ scan."
     (poimap-update-pois 'poimap-isearch "")
     (force-mode-line-update)))
 
-(defun poimap-isearch--reactivate-current-symbol-in-all-buffers ()
-  "Remove Poimap's Isearch inhibitor from every live buffer."
-  (when (fboundp 'poimap-current-symbol-reactivate)
-    (dolist (buffer (buffer-list))
-      (when (buffer-live-p buffer)
-        (with-current-buffer buffer
-          (poimap-current-symbol-reactivate 'isearch))))))
-
 ;;;###autoload
 (define-minor-mode poimap-isearch
   "Display active Isearch matches as poimap points of interest."
@@ -198,7 +190,8 @@ scan."
     (remove-hook 'poimap-idle-update-functions #'poimap-isearch--update)
     (remove-hook 'lazy-count-update-hook #'poimap-isearch--lazy-count-update)
     (remove-hook 'isearch-mode-end-hook #'poimap-isearch--isearch-end)
-    (poimap-isearch--reactivate-current-symbol-in-all-buffers)
+    (when (fboundp 'poimap-current-symbol-reactivate-all)
+      (poimap-current-symbol-reactivate-all 'isearch))
     (poimap--clear-buffer-state 'poimap-isearch)))
 
 (provide 'poimap-isearch)

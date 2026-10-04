@@ -105,6 +105,8 @@ The foreground color is used."
         (add-hook 'poimap-idle-update-functions #'poimap-swiper--update)
         (poimap--for-all-visible-window-buffers #'poimap-swiper--update t))
     (remove-hook 'poimap-idle-update-functions #'poimap-swiper--update)
+    (when (fboundp 'poimap-current-symbol-reactivate-all)
+      (poimap-current-symbol-reactivate-all 'swiper))
     (poimap--clear-buffer-state 'poimap-swiper)))
 
 (provide 'poimap-swiper)

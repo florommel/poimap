@@ -136,6 +136,13 @@ reactivated."
     (setq poimap-current-symbol--inhibitors
           (delq tag poimap-current-symbol--inhibitors))))
 
+(defun poimap-current-symbol-reactivate-all (tag)
+  "Reactivate current-symbol indicators for inhibitor TAG in all buffers."
+  (dolist (buffer (buffer-list))
+    (when (buffer-live-p buffer)
+      (with-current-buffer buffer
+        (poimap-current-symbol-reactivate tag)))))
+
 ;;;###autoload
 (define-minor-mode poimap-current-symbol
   "Display occurrences of the symbol at point as poimap POIs."
